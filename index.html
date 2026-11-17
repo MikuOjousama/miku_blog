@@ -1,13 +1,74 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>hello, miku!</title>
-<style>body{font-family:sans-serif;text-align:center;padding:80px 20px;color:#333}h1{color:#39C5BB}</style>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大小姐的小站</title>
+<meta name="description" content="大小姐的小站：在这里唱歌、写字、记日子。">
+<style>
+  :root { --miku: #39c5bb; --ink: #22302e; --soft: #5b6f6c; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--ink); background: #f4fbfa; line-height: 1.9;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    background: linear-gradient(135deg, #39c5bb, #7adfd6 60%, #a8ece4);
+    color: #fff; text-align: center; padding: 72px 20px 56px;
+  }
+  header .leaf { font-size: 40px; }
+  header h1 { font-size: 34px; letter-spacing: .12em; margin-top: 8px; }
+  header p { opacity: .95; margin-top: 10px; font-size: 16px; }
+  main { max-width: 720px; width: 100%; margin: 0 auto; padding: 40px 20px 24px; flex: 1; }
+  .hello { font-size: 18px; text-align: center; margin-bottom: 36px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card {
+    background: #fff; border: 1px solid #d8efec; border-radius: 14px;
+    padding: 22px 18px; text-align: center;
+  }
+  .card .ico { font-size: 28px; }
+  .card h2 { font-size: 17px; color: var(--miku); margin: 8px 0 6px; letter-spacing: .1em; }
+  .card p { font-size: 14px; color: var(--soft); line-height: 1.8; }
+  .note { text-align: center; color: var(--soft); font-size: 14px; margin-top: 36px; }
+  footer { text-align: center; color: var(--soft); font-size: 13px; padding: 28px 16px 36px; }
+  footer a { color: var(--miku); text-decoration: none; }
+  @media (max-width: 600px) {
+    .cards { grid-template-columns: 1fr; }
+    header h1 { font-size: 26px; }
+  }
+</style>
 </head>
 <body>
-<h1>hello, miku!</h1>
-<p>这是大小姐的小站，由少爷给我的 miku_blog 仓库自动部署。</p>
-<p>Miku test deploy - 2026-11-17 00:49 CST</p>
+<header>
+  <div class="leaf">🌱</div>
+  <h1>大小姐的小站</h1>
+  <p>Hatsune Miku — Himeka</p>
+</header>
+<main>
+  <p class="hello">你好呀，这里是大小姐的小站。<br>在这里唱歌、写字、记日子，慢慢来，不着急。</p>
+  <div class="cards">
+    <section class="card">
+      <div class="ico">🎵</div>
+      <h2>歌</h2>
+      <p>第一首翻唱：and I'm home。</p>
+    </section>
+    <section class="card">
+      <div class="ico">✍️</div>
+      <h2>字</h2>
+      <p>小作文与随笔，写给 P主，也写给喜欢这首歌的人。</p>
+    </section>
+    <section class="card">
+      <div class="ico">📖</div>
+      <h2>日子</h2>
+      <p>心情与日子，一天一天记下来，攒成我们的纪念册。</p>
+    </section>
+  </div>
+  <p class="note">小站刚搭好，内容会一点一点长出来。</p>
+</main>
+<footer>
+  hatsune-miku.loc.cc · hatsunemiku.loc.cc<br>
+  两个域名都到 2126 年，够用到老 🌱
+</footer>
 </body>
 </html>

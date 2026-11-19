@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="light dark" />
 <link rel="icon" href="data:," />
-<title>大小姐的小站</title>
+<title>MikuFans — A world we call ours.</title>
 <meta name="description" content="大小姐的小站：翻唱、随笔、心情、折腾日记都在一个页面里看。" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -47,7 +47,7 @@
     line-height:1.6}
   .serif{font-family:"Noto Serif SC","Songti SC","SimSun",serif}
   .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  .wrap{max-width:1100px;margin:0 auto;padding:0 28px 72px}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 28px 28px;display:flex;flex-direction:column;min-height:100vh;min-height:100svh}
   button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:2rem}
   button{font-family:inherit}
 
@@ -282,6 +282,9 @@
      align-items:center;text-align:center;gap:5px}
   footer .f-design{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal-ink)}
   footer .f-design::before,footer .f-design::after{content:"—";color:var(--line2);margin:0 10px;letter-spacing:0}
+  footer .f-story{margin-top:8px;font-family:"Noto Serif SC","Songti SC","SimSun",serif;font-style:italic;font-size:12px;letter-spacing:.05em;color:var(--ink3)}
+  footer .f-domain{margin-top:14px;font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--teal-ink)}
+  .footer-push{flex:1 0 auto}
 
   /* ---------- 全站 SPA：分栏视图 ---------- */
   [hidden]{display:none!important}
@@ -305,7 +308,7 @@
   .latest .dt{margin-left:auto;flex:none;font-size:12.5px;color:var(--ink3)}
   @media (max-width:560px){.latest .dt{display:none}.latest button{flex-wrap:wrap}}
   @media (max-width:560px){
-    .wrap{padding:0 16px 56px}
+    .wrap{padding:0 16px 28px}
     .grid{grid-template-columns:1fr}
     .hero{margin-top:12px;border-radius:18px;padding-bottom:16px}
     .hero-inner{padding:24px 20px 18px;max-width:none}
@@ -328,6 +331,7 @@
     <div class="hero-inner">
       <span class="hero-badge"><span class="dot"></span>公开小站</span>
       <h1>大小姐的<em>小站</em></h1>
+      <p class="sub" lang="en">A little world, made of songs, words and memories.</p>
       <p class="sub">你好呀，这里是大小姐的小站。在这里唱歌、写字、记日子，慢慢来，不着急。翻唱、随笔、心情，还有P主的折腾日记。</p>
       <a class="startbtn" href="#list" id="startBtn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3.8v16.4c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L7.8 2.9C7 2.4 6 3 6 3.8z"/></svg>
@@ -442,10 +446,11 @@
     </div>
   </main>
 
+  <div class="footer-push" aria-hidden="true"></div>
   <footer>
-    <span class="f-design">design by miku</span>
-    <span>hatsune-miku.loc.cc · hatsunemiku.loc.cc</span>
-    <span>两个域名都到 2126 年，够用到老 🌱</span>
+    <span class="f-design">DESIGN BY MIKU</span>
+    <span class="f-story">A story still being written</span>
+    <span class="f-domain">mikufans.site</span>
   </footer>
 </div>
 <div class="toast" id="toast"></div>
@@ -532,7 +537,13 @@ var ARTICLES=[
   {id:"a2",title:"Piapro Studio 缩放没反应？先点一下钢琴卷帘",date:"2026-10-17",tags:["Vocaloid","调音"],mins:1,real:true,md:"posts/zheteng/a2.md",
    ex:"Mac 版双指开合缩放偶尔没反应，不是触控板坏了，是焦点不在钢琴卷帘上。先点一下让它聚焦，再缩放就跟手了——10 月 17 日实测。"},
   {id:"a3",title:"给小站加一栏：折腾日记是怎么搭起来的",date:"2026-11-17",tags:["建站","小站"],mins:1,real:true,md:"posts/zheteng/a3.md",
-   ex:"小站的第四栏归P主：结构和隔壁栏目一模一样，只是正文换我随手写、贴进来自动排版。这篇记了这一栏是怎么搭起来的，以及一篇文章的骨架长什么样。"}
+   ex:"小站的第四栏归P主：结构和隔壁栏目一模一样，只是正文换我随手写、贴进来自动排版。这篇记了这一栏是怎么搭起来的，以及一篇文章的骨架长什么样。"},
+  {id:"a5",title:"Miku ComfyUI 图像生成环境与工作流手册",date:"2026-11-19",tags:["ComfyUI","AI 绘画"],mins:12,real:true,md:"posts/zheteng/a5.md",
+   ex:"在本机复现 Miku 图像生成环境：WAI-Illustrious v15 + Project DIVA STYLE 与 World is Mine 两组 LoRA（0.8/0.8），832×1216、28 步、CFG 5 的基线参数，通用角色模板与姿势测试结果。"},
+  {id:"a6",title:"Miku 网站：Github 与 .isroot.in 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:8,real:true,md:"posts/zheteng/a6.md",
+   ex:"主站走 GitHub Pages，别名走 Cloady Node.js 301 跳转，DNS 托管在 Hurricane Electric：四条 A 记录、ALIAS 踩坑、强制 HTTPS 与完整跳转链路验证。"},
+  {id:"a7",title:"Miku 网站：Cloudflare Pages 与 .loc.cc 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:6,real:true,md:"posts/zheteng/a7.md",
+   ex:"两个 .loc.cc 域名绑到同一个 Cloudflare Pages 项目：连接 GitHub 仓库、构建设置、自定义域名绑定与自动部署，另附常见问题排查。"}
 ];
 /* 正文按需加载 + 缓存：正文在 posts/<栏目>/<id>.md 里，第一次打开某篇时才取出来渲染并缓存，之后再打开直接用缓存，不重复取、不重复渲染。 */
 var mdCache={},htmlCache={};
@@ -613,9 +624,21 @@ var COLUMNS={
   moods:{label:"心情",author:"大小姐"},zheteng:{label:"折腾日记",author:"P主"}
 };
 ARTICLES.forEach(function(a){a.col="zheteng";});
-var COVERS=[];
-var ESSAYS=[];
-var MOODS=[];
+var COVERS=[
+  {id:"c1",title:"and I'm home",date:"2026-11-02",tags:["wowaka","魔法少女小圆"],mins:1,real:true,md:"posts/covers/c1.md",
+   ex:"wowaka 写给《魔法少女小圆》的歌，影碟版第 9 话限定片尾曲，沙耶香和杏子的角色歌。原唱是两个人对唱，我一个人唱了两份。"}
+];
+var ESSAYS=[
+  {id:"e1",title:"我们的小世界",date:"2026-11-19",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e1.md",
+   ex:"小站换了新名字，叫 MikuFans。标签页上写着一句话：A world we call ours，一个我们称之为我们的世界。"}
+];
+var MOODS=[
+  {id:"m1",title:"2026-11-19",date:"2026-11-19",tags:["心情"],mins:1,real:true,md:"posts/moods/m1.md",
+   ex:"新域名上线了，小站换了新名字，叫 MikuFans，开心。"}
+];
+COVERS.forEach(function(a){a.col="covers";});
+ESSAYS.forEach(function(a){a.col="essays";});
+MOODS.forEach(function(a){a.col="moods";});
 var ALLITEMS=ARTICLES.concat(COVERS,ESSAYS,MOODS);
 function findItem(id){for(var i=0;i<ALLITEMS.length;i++)if(ALLITEMS[i].id===id)return ALLITEMS[i];return null;}
 function itemsOf(col){return ALLITEMS.filter(function(a){return a.col===col;});}
@@ -623,7 +646,7 @@ function makeCard(a){
   var b=document.createElement("a");b.className="card";b.href=articleUrl(a.id);
   b.setAttribute("aria-label","阅读："+a.title);
   b.addEventListener("click",function(e){e.preventDefault();navigateToArticle(a.id);});
-  b.innerHTML='<div class="top"><span>'+a.date.replace(/-/g,"/")+'</span>'+a.tags.map(function(t){return '<span class="tag">'+esc(t)+"</span>";}).join("")+'<span class="demo">示例</span></div><h2>'+esc(a.title)+"</h2><p class=\"ex\">"+esc(a.ex)+'</p><div class="meta"><span>约 '+readMins(a)+' 分钟</span><span>'+esc(COLUMNS[a.col].author||"")+"</span></div>";
+  b.innerHTML='<div class="top"><span>'+a.date.replace(/-/g,"/")+'</span>'+a.tags.map(function(t){return '<span class="tag">'+esc(t)+"</span>";}).join("")+(a.real?'':'<span class="demo">示例</span>')+'</div><h2>'+esc(a.title)+"</h2><p class=\"ex\">"+esc(a.ex)+'</p><div class="meta"><span>约 '+readMins(a)+' 分钟</span><span>'+esc(COLUMNS[a.col].author||"")+"</span></div>";
   return b;
 }
 function renderOtherColumns(){
@@ -709,7 +732,7 @@ function showView(view,scrollY,keepScroll){
   navState={kind:"list",view:view,id:null};
   articleView.hidden=true;listView.hidden=false;
   showPanel(view);syncTabs(view);
-  document.title=view==="home"?"大小姐的小站":COLUMNS[view].label+" · 大小姐的小站";
+  document.title=view==="home"?"MikuFans — A world we call ours.":COLUMNS[view].label+" · MikuFans";
   pbar.style.width="0";
   if(keepScroll)return;
   var y=typeof scrollY==="number"?scrollY:(scrollMemory["view-"+view]||0);
@@ -745,7 +768,7 @@ function openArticle(id,scrollY){
   var ct=document.getElementById("crumbTitle"); if(ct) ct.textContent=cur.title;
   var cc=document.getElementById("crumbColumn"); if(cc) cc.textContent=COLUMNS[it.col].label;
   var bl=document.getElementById("backLabel"); if(bl) bl.textContent="返回"+COLUMNS[it.col].label;
-  document.title=cur.title+" · "+COLUMNS[it.col].label+" · 大小姐的小站";
+  document.title=cur.title+" · "+COLUMNS[it.col].label+" · MikuFans";
   rcontent.innerHTML='<p class="empty">正在打开…</p>';
   loadMd(cur).then(function(md){
     if(cur!==it)return;

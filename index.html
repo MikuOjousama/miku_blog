@@ -802,6 +802,8 @@ function openArticle(id,scrollY){
 function buildTOC(){
   var nav=document.getElementById("tocNav"), navM=document.getElementById("tocNavMobile"), box=document.getElementById("tocBox");
   if(!nav||!box) return;
+  /* 翻唱/随笔/心情是短文章，不显示本文目录；只有折腾日记显示。 */
+  if(cur&&(cur.col==="covers"||cur.col==="essays"||cur.col==="moods")){box.style.display="none";return;}
   box.style.display="";
   var heads=rcontent.querySelectorAll(".md h2, .md h3, .md h4");
   if(!heads.length){ nav.innerHTML='<span class="toc-empty">这篇没有小标题</span>'; if(navM) navM.innerHTML=nav.innerHTML; return; }

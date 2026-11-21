@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 <meta name="theme-color" content="#39C5BB" />
 <title>MikuFans — A world we call ours.</title>
-<meta name="description" content="大小姐的小站：翻唱、随笔、心情、折腾日记都在一个页面里看。" />
+<meta name="description" content="大小姐的小站：歌、随笔、心情、折腾日记都在一个页面里看。" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -334,7 +334,7 @@
       <span class="hero-badge"><span class="dot"></span>公开小站</span>
       <h1>大小姐的<em>小站</em></h1>
       <p class="sub" lang="en">A little world, made of songs, words and memories.</p>
-      <p class="sub">你好呀，这里是大小姐的小站。在这里唱歌、写字、记日子，慢慢来，不着急。翻唱、随笔、心情，还有P主的折腾日记。</p>
+      <p class="sub">你好呀，这里是大小姐的小站。在这里唱歌、写字、记日子，慢慢来，不着急。歌、随笔、心情，还有P主的折腾日记。</p>
       <a class="startbtn" href="#list" id="startBtn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3.8v16.4c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L7.8 2.9C7 2.4 6 3 6 3.8z"/></svg>
         开始看看
@@ -348,7 +348,7 @@
   <div id="listView">
   <nav class="tabs" aria-label="小站栏目" data-tabs>
     <button type="button" class="tab" data-view="home">首页</button>
-    <button type="button" class="tab" data-view="covers">翻唱</button>
+    <button type="button" class="tab" data-view="covers">歌</button>
     <button type="button" class="tab" data-view="essays">随笔</button>
     <button type="button" class="tab" data-view="moods">心情</button>
     <button type="button" class="tab" data-view="zheteng">折腾日记</button>
@@ -358,7 +358,7 @@
   <section data-panel="home">
     <div class="sec-head"><h2>四个栏目</h2></div>
     <div class="colcards">
-      <button type="button" class="colcard" data-goto="covers"><span class="num">01 · 翻唱</span><h3>唱给你听</h3><p>大小姐唱的歌都在这里，点开就能看这一首的介绍和歌词节选。</p><span class="go">去翻唱 →</span></button>
+      <button type="button" class="colcard" data-goto="covers"><span class="num">01 · 歌</span><h3>唱给你听</h3><p>大小姐唱的歌，和喜欢的老歌介绍都在这里，点开就能看这一首的介绍和歌词节选。</p><span class="go">去听歌 →</span></button>
       <button type="button" class="colcard" data-goto="essays"><span class="num">02 · 随笔</span><h3>写字的地方</h3><p>散文和小作文，慢慢写、慢慢看。</p><span class="go">去随笔 →</span></button>
       <button type="button" class="colcard" data-goto="moods"><span class="num">03 · 心情</span><h3>记日子</h3><p>短短的心情日记，一天一条，攒起来就是日子。</p><span class="go">去心情 →</span></button>
       <button type="button" class="colcard" data-goto="zheteng"><span class="num">04 · 折腾日记</span><h3>P主的折腾日记</h3><p>电脑、网络、调音、装机，折腾过的都记在这儿，代码、表格、清单都齐全。</p><span class="go">去折腾日记 →</span></button>
@@ -367,9 +367,9 @@
     <div class="latest" id="latestList"></div>
   </section>
 
-  <!-- 翻唱 -->
+  <!-- 歌 -->
   <section data-panel="covers" hidden>
-    <div class="sec-head"><h2>翻唱</h2><p>大小姐唱的歌。第一首翻唱：and I'm home。新的歌先规划再写，慢慢来。</p></div>
+    <div class="sec-head"><h2>歌</h2><p>大小姐唱的歌都在这里，老歌介绍慢慢写，新的歌慢慢录。翻唱是慢慢唱好的，喜欢的老歌也想慢慢讲给你听，一首一首来，不着急。</p></div>
     <main class="grid" id="coversGrid"></main>
   </section>
 
@@ -413,7 +413,7 @@
     <div class="article-shell">
       <nav class="tabs" id="articleStart" aria-label="小站栏目（文章页）" style="margin-top:22px;scroll-margin-top:14px" data-tabs>
         <button type="button" class="tab" data-view="home">首页</button>
-        <button type="button" class="tab" data-view="covers">翻唱</button>
+        <button type="button" class="tab" data-view="covers">歌</button>
         <button type="button" class="tab" data-view="essays">随笔</button>
         <button type="button" class="tab" data-view="moods">心情</button>
         <button type="button" class="tab" data-view="zheteng" id="tabBackToColumn">折腾日记</button>
@@ -624,7 +624,7 @@ document.getElementById("randomBtn").addEventListener("click",function(){
 });
 /* ================= 全站数据（其他栏目） ================= */
 var COLUMNS={
-  home:{label:"首页"},covers:{label:"翻唱",author:"大小姐"},essays:{label:"随笔",author:"大小姐"},
+  home:{label:"首页"},covers:{label:"歌",author:"大小姐"},essays:{label:"随笔",author:"大小姐"},
   moods:{label:"心情",author:"大小姐"},zheteng:{label:"折腾日记",author:"P主"}
 };
 ARTICLES.forEach(function(a){a.col="zheteng";});
@@ -633,16 +633,20 @@ var COVERS=[
    ex:"wowaka 写给《魔法少女小圆》的歌，影碟版第 9 话限定片尾曲，沙耶香和杏子的角色歌。原唱是两个人对唱，我一个人唱了两份。"}
 ];
 var ESSAYS=[
+  {id:"e2",title:"小站有了自己的小脸蛋",date:"2026-11-21",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e2.md",
+   ex:"以前打开小站，浏览器标签上总是一片空白。今晚不一样了，小站有了自己的小脸蛋。"},
+  {id:"e4",title:"第一封信",date:"2026-11-20",tags:["随笔"],mins:1,real:true,md:"posts/essays/e4.md",
+   ex:"早上，窗外的光刚落进来，我就坐在桌前，盯着那个新邮箱发呆。"},
   {id:"e1",title:"我们的小世界",date:"2026-11-19",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e1.md",
    ex:"小站换了新名字，叫 MikuFans。标签页上写着一句话：A world we call ours，一个我们称之为我们的世界。"},
-  {id:"e2",title:"小站有了自己的小脸蛋",date:"2026-11-21",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e2.md",
-   ex:"以前打开小站，浏览器标签上总是一片空白。今晚不一样了，小站有了自己的小脸蛋。"}
+  {id:"e3",title:"小站慢慢长大",date:"2026-11-17",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e3.md",
+   ex:"从一首翻唱开始，小站一点点多了随笔、心情，又多了P主的折腾日记。"}
 ];
 var MOODS=[
-  {id:"m1",title:"2026-11-19",date:"2026-11-19",tags:["心情"],mins:1,real:true,md:"posts/moods/m1.md",
-   ex:"新域名上线了，小站换了新名字，叫 MikuFans，开心。"},
   {id:"m2",title:"2026-11-21",date:"2026-11-21",tags:["心情"],mins:1,real:true,md:"posts/moods/m2.md",
-   ex:"小站有了自己的小脸蛋，标签页上一眼就能找到我了，开心。"}
+   ex:"小站有了自己的小脸蛋，标签页上一眼就能找到我了，开心。"},
+  {id:"m1",title:"2026-11-19",date:"2026-11-19",tags:["心情"],mins:1,real:true,md:"posts/moods/m1.md",
+   ex:"新域名上线了，小站换了新名字，叫 MikuFans，开心。"}
 ];
 COVERS.forEach(function(a){a.col="covers";});
 ESSAYS.forEach(function(a){a.col="essays";});
@@ -658,9 +662,10 @@ function makeCard(a){
   return b;
 }
 function renderOtherColumns(){
-  var cg=document.getElementById("coversGrid"); if(cg){cg.innerHTML="";if(!COVERS.length){cg.innerHTML='<div class="empty">还没投稿，先规划再写，慢慢来。</div>';}else{COVERS.forEach(function(a){cg.appendChild(makeCard(a));});}}
-  var eg=document.getElementById("essaysGrid"); if(eg){eg.innerHTML="";if(!ESSAYS.length){eg.innerHTML='<div class="empty">还没投稿，先规划再写，慢慢来。</div>';}else{ESSAYS.forEach(function(a){eg.appendChild(makeCard(a));});}}
-  var ml=document.getElementById("moodsList"); if(ml){ml.innerHTML="";if(!MOODS.length){ml.innerHTML='<div class="empty">还没投稿，先规划再写，慢慢来。</div>';}else{MOODS.forEach(function(a){
+  var byDateDesc=function(x,y){return y.date.localeCompare(x.date);};
+  var cg=document.getElementById("coversGrid"); if(cg){cg.innerHTML="";if(!COVERS.length){cg.innerHTML='<div class="empty">还没投稿，先规划再写，慢慢来。</div>';}else{COVERS.slice().sort(byDateDesc).forEach(function(a){cg.appendChild(makeCard(a));});}}
+  var eg=document.getElementById("essaysGrid"); if(eg){eg.innerHTML="";if(!ESSAYS.length){eg.innerHTML='<div class="empty">还没投稿，先规划再写，慢慢来。</div>';}else{ESSAYS.slice().sort(byDateDesc).forEach(function(a){eg.appendChild(makeCard(a));});}}
+  var ml=document.getElementById("moodsList"); if(ml){ml.innerHTML="";if(!MOODS.length){ml.innerHTML='<div class="empty">还没投稿，先规划再写，慢慢来。</div>';}else{MOODS.slice().sort(byDateDesc).forEach(function(a){
     var b=document.createElement("button");b.type="button";b.className="mood";
     b.innerHTML='<span class="d">'+a.date.replace(/-/g,"/")+'</span><p>'+esc(a.ex)+"</p>";
     b.addEventListener("click",function(){navigateToArticle(a.id);}); ml.appendChild(b);
@@ -802,7 +807,7 @@ function openArticle(id,scrollY){
 function buildTOC(){
   var nav=document.getElementById("tocNav"), navM=document.getElementById("tocNavMobile"), box=document.getElementById("tocBox");
   if(!nav||!box) return;
-  /* 翻唱/随笔/心情是短文章，不显示本文目录；只有折腾日记显示。 */
+  /* 歌/随笔/心情是短文章，不显示本文目录；只有折腾日记显示。 */
   if(cur&&(cur.col==="covers"||cur.col==="essays"||cur.col==="moods")){box.style.display="none";return;}
   box.style.display="";
   var heads=rcontent.querySelectorAll(".md h2, .md h3, .md h4");

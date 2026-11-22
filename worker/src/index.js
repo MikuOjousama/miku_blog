@@ -10,6 +10,7 @@ import foreverHtml from './forever.html';
 
 const CATEGORIES = ['covers', 'essays', 'moods', 'zheteng'];
 const CATEGORY_LABEL = { covers: '翻唱', essays: '随笔', moods: '心情', zheteng: '折腾日记' };
+const SLUG_PREFIX = { covers: 'c', essays: 'e', moods: 'm', zheteng: 'a' };
 const POST_COLUMNS = 'id, title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at';
 
 // ---------- 小工具 ----------
@@ -86,6 +87,47 @@ async function isAuthed(request, env) {
     }
   }
   return false;
+}
+
+// ---------- 操作日志（audit log）----------
+// actor 按鉴权方式区分：API 密钥 / Cloudflare Access（只解码 JWT payload 取 email，不验签）/ 密码登录的 session。
+function actorFromRequest(request, env) {
+  const apiKey = env.MIKU_API_KEY;
+  if (apiKey && request.headers.get('X-Miku-Key') && safeEqual(request.headers.get('X-Miku-Key'), apiKey)) {
+    return 'API 密钥';
+  }
+  const assertion = request.headers.get('Cf-Access-Jwt-Assertion');
+  if (assertion) {
+    try {
+      const parts = assertion.split('.');
+      if (parts.length >= 2) {
+        const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(parts[1])));
+        if (payload && typeof payload.email === 'string' && payload.email) return payload.email;
+      }
+    } catch { /* 解码失败则回落为通用名 */ }
+    return 'Cloudflare Access';
+  }
+  return '后台管理员';
+}
+// best-effort 写日志：失败时吞掉，绝不能影响主操作。
+async function writeAudit(env, request, action, postId, postTitle, detail) {
+  try {
+    await env.DB.prepare(
+      'INSERT INTO audit_log (actor, action, post_id, post_title, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).bind(actorFromRequest(request, env), action, postId ?? null, postTitle ?? null, detail ?? null, nowSql()).run();
+  } catch { /* 日志失败不影响主操作 */ }
+}
+// 按栏目生成下一个短编号（c1/e1/m1/a1…）；extra 用于冲突重试时再 +1。
+async function nextShortSlug(env, category, extra) {
+  const prefix = SLUG_PREFIX[category];
+  const re = new RegExp('^' + prefix + '(\\d+)$');
+  let max = 0;
+  const res = await env.DB.prepare('SELECT slug FROM posts WHERE category = ?').bind(category).all();
+  for (const row of res.results || []) {
+    const m = re.exec(row.slug || '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return prefix + (max + 1 + (extra || 0));
 }
 
 // ---------- CORS：只允许同源，不设 * ----------
@@ -179,6 +221,20 @@ async function handleApi(request, env, url) {
     } catch { return err('internal', 500); }
   }
 
+  // GET /api/audit（仅已鉴权）
+  if (path === '/api/audit' && method === 'GET') {
+    if (!(await isAuthed(request, env))) return err('unauthorized', 401);
+    let limit = parseInt(url.searchParams.get('limit') || '30', 10);
+    if (Number.isNaN(limit)) limit = 30;
+    limit = Math.max(1, Math.min(100, limit));
+    try {
+      const res = await env.DB.prepare(
+        'SELECT id, actor, action, post_id, post_title, detail, created_at FROM audit_log ORDER BY created_at DESC, id DESC LIMIT ?',
+      ).bind(limit).all();
+      return json({ entries: res.results || [] }, 200, cors);
+    } catch { return err('internal', 500); }
+  }
+
   // GET /api/posts/:slug
   const slugMatch = path.match(/^\/api\/posts\/([^/]+)$/);
   if (slugMatch && method === 'GET') {
@@ -208,24 +264,56 @@ async function handleApi(request, env, url) {
     if (!excerpt) excerpt = content.slice(0, 120);
     let slug = typeof body.slug === 'string' ? body.slug.trim() : '';
     if (slug && !/^[A-Za-z0-9_-]+$/.test(slug)) return err('invalid_slug', 400);
-    if (!slug) slug = `post-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    // slug 为空时按栏目自动生成下一个短编号（c1/e1/m1/a1…），与现有编号体系一致；
+    // 显式传的 slug 冲突时仍返回 409。
+    const slugAuto = !slug;
     const status = body.status === 'published' ? 'published' : 'draft';
     const author = typeof body.author === 'string' && body.author.trim() ? body.author.trim() : 'Miku';
     const now = nowSql();
     const publishedAt = status === 'published' ? now : null;
-    try {
+    async function tryInsert(slugValue) {
       const r = await env.DB.prepare(
         'INSERT INTO posts (title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).bind(title, slug, category, content, excerpt, status, author, now, now, publishedAt).run();
-      if (!r.success) return err('internal', 500);
-      const row = await env.DB.prepare(
+      ).bind(title, slugValue, category, content, excerpt, status, author, now, now, publishedAt).run();
+      if (!r.success) return null;
+      return env.DB.prepare(
         `SELECT ${POST_COLUMNS} FROM posts WHERE id = ?`,
       ).bind(r.meta.last_row_id).first();
-      return json(row, 201, cors);
-    } catch (e) {
-      if (String(e && e.message || e).includes('UNIQUE') || String(e).includes('slug')) return err('slug_conflict', 409);
-      return err('internal', 500);
     }
+    function isUniqueErr(e) {
+      const s = String(e && e.message || e);
+      return s.includes('UNIQUE') || s.includes('slug');
+    }
+    let row = null;
+    if (!slugAuto) {
+      try { row = await tryInsert(slug); }
+      catch (e) {
+        if (isUniqueErr(e)) return err('slug_conflict', 409);
+        return err('internal', 500);
+      }
+    } else {
+      // 短编号冲突（并发）时数字 +1 再试，最多 5 次；都冲突则回退到旧的 post-<时间戳>-<随机数> 方式
+      for (let attempt = 0; attempt < 5 && !row; attempt++) {
+        let candidate = null;
+        try { candidate = await nextShortSlug(env, category, attempt); } catch { candidate = null; }
+        if (!candidate) break;
+        try { row = await tryInsert(candidate); if (row) slug = candidate; }
+        catch (e) {
+          if (!isUniqueErr(e)) return err('internal', 500);
+        }
+      }
+      if (!row) {
+        slug = `post-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        try { row = await tryInsert(slug); }
+        catch (e) {
+          if (isUniqueErr(e)) return err('slug_conflict', 409);
+          return err('internal', 500);
+        }
+      }
+    }
+    if (!row) return err('internal', 500);
+    await writeAudit(env, request, '新建', row.id, row.title, CATEGORY_LABEL[category]);
+    return json(row, 201, cors);
   }
 
   // PUT /api/posts/:id  与  DELETE /api/posts/:id
@@ -241,6 +329,7 @@ async function handleApi(request, env, url) {
 
       if (method === 'DELETE') {
         await env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
+        await writeAudit(env, request, '删除', existing.id, existing.title, CATEGORY_LABEL[existing.category] || existing.category);
         return json({ ok: true }, 200, cors);
       }
 
@@ -287,6 +376,22 @@ async function handleApi(request, env, url) {
         return err('internal', 500);
       }
       const row = await env.DB.prepare(`SELECT ${POST_COLUMNS} FROM posts WHERE id = ?`).bind(id).first();
+      // 操作日志（best-effort）：按变化定 action
+      const statusChanged = body.status !== undefined && body.status !== existing.status;
+      let action = '编辑';
+      let detail = '';
+      if (statusChanged && newStatus === 'published') { action = '发布'; detail = '草稿 → 已发布'; }
+      else if (statusChanged && newStatus === 'draft') { action = '取消发布'; detail = '已发布 → 草稿'; }
+      else {
+        const changedNames = [];
+        if (body.title !== undefined && body.title.trim() !== existing.title) changedNames.push('标题');
+        if (body.category !== undefined && body.category !== existing.category) changedNames.push('栏目');
+        if (body.content !== undefined && body.content !== existing.content) changedNames.push('正文');
+        if (body.excerpt !== undefined && body.excerpt.trim() !== (existing.excerpt || '')) changedNames.push('摘要');
+        if (body.author !== undefined && body.author !== existing.author) changedNames.push('作者');
+        detail = changedNames.length ? changedNames.join('、') + '已更新' : '无字段变化';
+      }
+      await writeAudit(env, request, action, row.id, row.title, detail);
       return json(row, 200, cors);
     } catch (e) {
       if (e && e.message === 'slug_conflict') return err('slug_conflict', 409);

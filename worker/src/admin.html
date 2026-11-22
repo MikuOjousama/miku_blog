@@ -151,6 +151,14 @@
   .pill.published{background:var(--teal-soft);color:var(--teal-deep)}
   .pill.draft{background:var(--amber-soft);color:var(--amber)}
   .post-row .btn{flex:none}
+  .post-title{cursor:pointer}
+  .post-title:hover{color:var(--teal-deep);text-decoration:underline}
+  .audit-row{display:flex;gap:10px;align-items:baseline;padding:10px 18px;border-bottom:1px solid var(--line);font-size:13px}
+  .audit-row:last-child{border-bottom:0}
+  .audit-row .a-time{color:var(--muted);font-size:12px;white-space:nowrap}
+  .audit-row .a-act{font-weight:700;color:var(--teal-deep);white-space:nowrap}
+  .audit-row .a-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .audit-row .a-actor{color:var(--muted);font-size:12px;white-space:nowrap}
   #empty{padding:18px;text-align:center}
   .kv{display:flex;flex-direction:column;gap:2px;padding:8px 18px 16px}
   .kv-row{display:flex;justify-content:space-between;gap:11px;font-size:13px;padding:7px 0;border-bottom:1px dashed var(--line)}
@@ -259,9 +267,8 @@
             <select id="fCategory" aria-label="栏目"><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
           </div>
           <div class="row3">
-            <div><label>slug（留空自动生成）</label><input id="fSlug" placeholder="post-…"></div>
             <div><label>状态</label><select id="fPostStatus"><option value="draft">草稿</option><option value="published">已发布</option></select></div>
-            <div><label>作者</label><input id="fAuthor" value="Miku"></div>
+            <div><label>作者</label><input id="fAuthor" value="P主"></div>
           </div>
           <label>摘要（留空取正文前 120 字）</label><input id="fExcerpt">
           <div class="panes">
@@ -298,6 +305,11 @@
           <p id="empty" class="muted hidden">还没有文章，先写一篇吧。</p>
         </section>
         <div class="side-stack">
+          <section class="card" id="auditCard">
+            <div class="card-head"><h2>最近动态</h2><button type="button" class="linklike" id="auditRefresh">刷新</button></div>
+            <div id="auditList"></div>
+            <p id="auditEmpty" class="muted hidden" style="padding:14px 18px">暂无操作记录。</p>
+          </section>
           <section class="card" id="d1Card">
             <div class="card-head"><h2>数据 · D1</h2></div>
             <div class="kv">
@@ -389,7 +401,7 @@
   function setAuthUI(authed){
     $('loginBox').classList.toggle('hidden',authed);
     $('app').classList.toggle('hidden',!authed);
-    if(authed)loadList();
+    if(authed){loadList();loadAudit();}
   }
   async function checkMe(){
     try{var m=await api('/api/me');setAuthUI(!!m.authed);}catch(e){setAuthUI(false);}
@@ -415,13 +427,16 @@
     });
     $('empty').classList.toggle('hidden',rows.length>0);
     $('list').innerHTML=rows.map(function(p){
-      return '<div class="post-row"><div class="post-main"><b>'+esc(p.title)+'</b><span class="post-meta">'+esc(p.slug||'')+' · '+esc(fmtTime(p.updated_at||p.created_at)||'')+'</span></div>'
+      return '<div class="post-row"><div class="post-main"><b class="post-title" data-edit="'+p.id+'" title="点击编辑">'+esc(p.title)+'</b><span class="post-meta">'+esc(p.slug||'')+' · '+esc(fmtTime(p.updated_at||p.created_at)||'')+'</span></div>'
         +'<span class="pill cat">'+esc(CATEGORY_LABEL[p.category]||p.category)+'</span>'
         +'<span class="pill '+(p.status==='published'?'published':'draft')+'">'+(p.status==='published'?'已发布':'草稿')+'</span>'
-        +'<button type="button" class="btn" data-edit="'+p.id+'">编辑</button></div>';
+        +'<button type="button" class="btn danger" data-del="'+p.id+'">删除</button></div>';
     }).join('');
     Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'),function(b){
       b.onclick=function(){openEditor(+b.getAttribute('data-edit'));};
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-del]'),function(b){
+      b.onclick=function(){deletePost(+b.getAttribute('data-del'));};
     });
     setActiveNav();
   }
@@ -433,6 +448,26 @@
     }catch(e){showErr('加载列表失败：'+e.message);}
   }
   $('refreshBtn').onclick=loadList;
+  // 最近动态：登录后加载，增删改成功后刷新
+  async function loadAudit(){
+    var box=$('auditList'),empty=$('auditEmpty');
+    try{
+      var d=await api('/api/audit?limit=30');
+      var entries=d.entries||[];
+      empty.classList.toggle('hidden',entries.length>0);
+      box.innerHTML=entries.map(function(e){
+        return '<div class="audit-row"><span class="a-time">'+esc(fmtTime(e.created_at))+'</span>'
+          +'<span class="a-act">'+esc(e.action)+'</span>'
+          +'<span class="a-title">'+esc(e.post_title||'—')+'</span>'
+          +'<span class="a-actor">'+esc(e.actor)+'</span></div>';
+      }).join('');
+    }catch(err){
+      box.innerHTML='';
+      empty.classList.remove('hidden');
+      empty.textContent='动态加载失败：'+err.message;
+    }
+  }
+  $('auditRefresh').onclick=loadAudit;
   $('fCat').onchange=renderList;$('fStatus').onchange=renderList;$('fQ').oninput=renderList;
   // 统计全部按已加载的文章列表在前端算，不编造任何访问量数据
   function updateStats(){
@@ -525,10 +560,10 @@
     if(p&&p.status==='published'){tag.textContent='已发布';tag.className='tag teal';}
     else{tag.textContent='草稿 · 未发布';tag.className='tag amber';}
     $('fTitle').value=p?p.title:'';
-    $('fSlug').value=p?p.slug:'';
-    $('fCategory').value=p?p.category:'covers';
+    // 新建默认值：栏目折腾日记、作者 P主；编辑旧文章时显示该文章真实的栏目与作者
+    $('fCategory').value=p?p.category:'zheteng';
     $('fPostStatus').value=p?p.status:'draft';
-    $('fAuthor').value=p?p.author:'Miku';
+    $('fAuthor').value=p?p.author:'P主';
     $('fExcerpt').value=p?p.excerpt||'':'';
     $('fContent').value=p?p.content:'';
     $('preview').innerHTML=md($('fContent').value);
@@ -541,14 +576,15 @@
   $('cancelBtn').onclick=function(){$('editor').classList.add('hidden');editingId=null;};
   $('fContent').oninput=function(){$('preview').innerHTML=md($('fContent').value);updateWc();};
   function formBody(statusOverride){
+    // 不发 slug：新建由后端自动生成短编号，编辑时后端保持原 slug 不变
+    var cur=editingId?allPosts.find(function(x){return x.id===editingId;}):null;
     return {
       title:$('fTitle').value.trim(),
-      slug:$('fSlug').value.trim()||undefined,
       category:$('fCategory').value,
       content:$('fContent').value,
       excerpt:$('fExcerpt').value.trim(),
       status:statusOverride||$('fPostStatus').value,
-      author:$('fAuthor').value.trim()||'Miku'
+      author:$('fAuthor').value.trim()||(cur?cur.author:'P主')
     };
   }
   async function save(statusOverride){
@@ -560,10 +596,9 @@
       if(editingId){d=await api('/api/posts/'+editingId,{method:'PUT',body:JSON.stringify(body)});}
       else{d=await api('/api/posts',{method:'POST',body:JSON.stringify(body)});}
       editingId=d.id;
-      $('fSlug').value=d.slug||'';
-      await loadList();openEditor(d.id);
+      await loadList();openEditor(d.id);loadAudit();
     }catch(e){
-      if(String(e.message).indexOf('slug_conflict')>=0)showErr('保存失败：slug 已被占用，换一个 slug 再试。');
+      if(String(e.message).indexOf('slug_conflict')>=0)showErr('保存失败：slug 冲突，请再试一次。');
       else if(String(e.message).indexOf('invalid_category')>=0)showErr('保存失败：栏目只能是 covers / essays / moods / zheteng。');
       else showErr('保存失败：'+e.message);
     }
@@ -571,13 +606,19 @@
   $('saveBtn').onclick=function(){save();};
   $('publishBtn').onclick=function(){save('published');};
   $('unpublishBtn').onclick=function(){save('draft');};
-  $('deleteBtn').onclick=async function(){
-    if(!editingId)return;
-    if(!confirm('确定要删除这篇文章吗？删了就找不回来了。'))return;
+  // 列表行尾的删除按钮与编辑器内的删除共用：确认框 → DELETE → 刷新列表与动态
+  async function deletePost(id){
+    var p=allPosts.find(function(x){return x.id===id;});
+    if(!p)return;
+    if(!confirm('确定要删除「'+p.title+'」吗？删了就找不回来了。'))return;
     clearErr();
-    try{await api('/api/posts/'+editingId,{method:'DELETE'});editingId=null;$('editor').classList.add('hidden');await loadList();}
-    catch(e){showErr('删除失败：'+e.message);}
-  };
+    try{
+      await api('/api/posts/'+id,{method:'DELETE'});
+      if(editingId===id){editingId=null;$('editor').classList.add('hidden');}
+      await loadList();loadAudit();
+    }catch(e){showErr('删除失败：'+e.message);}
+  }
+  $('deleteBtn').onclick=function(){if(editingId)deletePost(editingId);};
   checkMe();
 })();
 </script>

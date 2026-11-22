@@ -13,9 +13,12 @@ const srcDir = join(dir, 'src');
 // ---- mock D1 ----
 function makeMockDB() {
   const posts = [];
+  const audit = [];
   let nextId = 1;
+  let nextAuditId = 1;
   return {
     _posts: posts,
+    _audit: audit,
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -53,9 +56,25 @@ function makeMockDB() {
             if (i >= 0) posts.splice(i, 1);
             return { success: true, meta: {} };
           }
+          if (/INSERT INTO audit_log/i.test(sql)) {
+            const [actor, action, post_id, post_title, detail, created_at] = this._params;
+            const row = { id: nextAuditId++, actor, action, post_id, post_title, detail, created_at };
+            audit.push(row);
+            return { success: true, meta: { last_row_id: row.id } };
+          }
           return { success: true, meta: {} };
         },
         async all() {
+          if (/FROM audit_log/i.test(sql)) {
+            let out = [...audit];
+            out.sort((a, b) => (b.created_at < a.created_at ? -1 : b.created_at > a.created_at ? 1 : b.id - a.id));
+            const limit = this._params[0];
+            return { results: out.slice(0, limit) };
+          }
+          if (/SELECT slug FROM posts WHERE category = \?/i.test(sql)) {
+            const v = this._params[0];
+            return { results: posts.filter((p) => p.category === v).map((p) => ({ slug: p.slug })) };
+          }
           if (/ORDER BY created_at DESC/i.test(sql)) {
             let out = [...posts];
             let pi = 0;
@@ -68,8 +87,11 @@ function makeMockDB() {
           return { results: [] };
         },
         async first() {
-          if (/WHERE slug = \?/.test(sql)) return posts.find((p) => p.slug === this._params[0]) || null;
-          if (/WHERE id = \?/.test(sql)) return posts.find((p) => p.id === this._params[0]) || null;
+          // 像真实 D1 一样返回快照拷贝，而不是行对象的 live 引用，
+          // 否则 PUT 前查到的 existing 会被随后的 UPDATE 原地改掉。
+          const copy = (r) => (r ? { ...r } : null);
+          if (/WHERE slug = \?/.test(sql)) return copy(posts.find((p) => p.slug === this._params[0]));
+          if (/WHERE id = \?/.test(sql)) return copy(posts.find((p) => p.id === this._params[0]));
           return null;
         },
       };
@@ -154,7 +176,7 @@ await t('create draft auto excerpt+slug', async () => {
   assertEq(r.status, 201, 'create status');
   assertEq(r.body.status, 'draft');
   assertEq(r.body.excerpt.length, 120);
-  assert(r.body.slug && r.body.slug.startsWith('post-'), 'slug not auto');
+  assertEq(r.body.slug, 'e1', 'slug should auto-generate next short id for essays');
   assertEq(r.body.published_at, null);
   draftId = r.body.id; draftSlug = r.body.slug;
 });
@@ -242,6 +264,49 @@ await t('logout clears cookie', async () => {
   const r = await callJson(env, '/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: '{}' });
   assertEq(r.status, 200);
   assert((r.headers.get('Set-Cookie') || '').includes('Max-Age=0'), 'logout did not clear');
+});
+
+// 21 短编号按栏目递增：随笔已有 e1，下一篇应为 e2，再下一篇 e3；空栏目从 1 开始
+await t('slug auto short id increments per category', async () => {
+  const a = await callJson(env, '/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: JSON.stringify({ title: '随笔二', category: 'essays', content: 'x' }) });
+  assertEq(a.status, 201); assertEq(a.body.slug, 'e2');
+  const b = await callJson(env, '/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: JSON.stringify({ title: '随笔三', category: 'essays', content: 'x' }) });
+  assertEq(b.body.slug, 'e3');
+  const c = await callJson(env, '/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: JSON.stringify({ title: '翻唱一', category: 'covers', content: 'x' }) });
+  assertEq(c.body.slug, 'c1');
+});
+// 22 操作日志：新建有记录，未鉴权读 401
+await t('audit records create, unauth read 401', async () => {
+  const u = await callJson(env, '/api/audit');
+  assertEq(u.status, 401);
+  const r = await callJson(env, '/api/audit?limit=30', { headers: { Cookie: sessionCookie } });
+  assertEq(r.status, 200);
+  const e = (r.body.entries || []).find((x) => x.action === '新建' && x.post_title === '随笔三');
+  assert(e, 'no 新建 entry for 随笔三');
+  assertEq(e.actor, '后台管理员');
+});
+// 23 操作日志：发布与删除的 action
+await t('audit publish + delete actions', async () => {
+  const list = await callJson(env, '/api/posts?status=all', { headers: { Cookie: sessionCookie } });
+  const target = list.body.posts.find((p) => p.slug === 'e2');
+  assert(target, 'e2 not found');
+  const p = await callJson(env, `/api/posts/${target.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: JSON.stringify({ status: 'published' }) });
+  assertEq(p.status, 200);
+  const d = await callJson(env, `/api/posts/${target.id}`, { method: 'DELETE', headers: { Cookie: sessionCookie } });
+  assertEq(d.status, 200);
+  const a = await callJson(env, '/api/audit?limit=100', { headers: { Cookie: sessionCookie } });
+  const acts = (a.body.entries || []).filter((x) => x.post_title === '随笔二').map((x) => x.action);
+  assert(acts.includes('发布'), 'no 发布 entry, got ' + acts.join(','));
+  assert(acts.includes('删除'), 'no 删除 entry, got ' + acts.join(','));
+});
+// 24 API 密钥鉴权的 actor 为 API 密钥
+await t('audit actor is API key for X-Miku-Key', async () => {
+  const r = await callJson(env, '/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Miku-Key': 'test-key-abc' }, body: JSON.stringify({ title: '密钥写的', category: 'moods', content: 'x' }) });
+  assertEq(r.status, 201);
+  const a = await callJson(env, '/api/audit?limit=5', { headers: { Cookie: sessionCookie } });
+  const e = (a.body.entries || []).find((x) => x.post_title === '密钥写的');
+  assert(e, 'no entry for 密钥写的');
+  assertEq(e.actor, 'API 密钥');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

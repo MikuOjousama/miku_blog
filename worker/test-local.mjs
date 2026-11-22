@@ -26,9 +26,9 @@ function makeMockDB() {
         bind(...p) { this._params = p; return this; },
         async run() {
           if (/INSERT INTO posts/i.test(sql)) {
-            const [title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at] = this._params;
+            const [title, slug, category, content, excerpt, status, author, tags, created_at, updated_at, published_at] = this._params;
             if (posts.some((p) => p.slug === slug)) throw new Error('UNIQUE constraint failed: posts.slug');
-            const row = { id: nextId++, title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at };
+            const row = { id: nextId++, title, slug, category, content, excerpt, status, author, tags, created_at, updated_at, published_at };
             posts.push(row);
             return { success: true, meta: { last_row_id: row.id } };
           }
@@ -307,6 +307,44 @@ await t('audit actor is API key for X-Miku-Key', async () => {
   const e = (a.body.entries || []).find((x) => x.post_title === '密钥写的');
   assert(e, 'no entry for 密钥写的');
   assertEq(e.actor, 'API 密钥');
+});
+
+// 25 标签往返：新建带 tags（trim/去空/截断 20 字/最多 10 个），读回一致；PUT 改 tags 也一致
+await t('tags round-trip create + PUT', async () => {
+  const r = await callJson(env, '/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: JSON.stringify({ title: '带标签', category: 'essays', content: 'x', status: 'published', tags: [' 建站 ', '', '域名', 'x'.repeat(25), 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'] }) });
+  assertEq(r.status, 201);
+  assert(Array.isArray(r.body.tags), 'tags not array on create');
+  assertEq(r.body.tags.length, 10, 'tags should cap at 10, got ' + r.body.tags.length);
+  assertEq(r.body.tags[0], '建站');
+  assertEq(r.body.tags[1], '域名');
+  assertEq(r.body.tags[2], 'x'.repeat(20), 'over-long tag should truncate to 20');
+  const id = r.body.id;
+  const g = await callJson(env, `/api/posts/${r.body.slug}`);
+  assertEq(g.status, 200);
+  assertEq(JSON.stringify(g.body.tags), JSON.stringify(r.body.tags), 'GET single tags mismatch');
+  const p = await callJson(env, `/api/posts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Cookie: sessionCookie }, body: JSON.stringify({ tags: ['新标签', '  '] }) });
+  assertEq(p.status, 200);
+  assertEq(JSON.stringify(p.body.tags), JSON.stringify(['新标签']), 'PUT tags mismatch, got ' + JSON.stringify(p.body.tags));
+  const l = await callJson(env, '/api/posts?category=essays&limit=100');
+  const found = (l.body.posts || []).find((x) => x.id === id);
+  assert(found && Array.isArray(found.tags) && found.tags[0] === '新标签', 'list tags mismatch');
+});
+// 26 公开 GET /api/posts 允许主站跨域；其他源、status=all 不放开
+await t('public CORS only for mikufans.site GET /api/posts', async () => {
+  const a = await call(env, '/api/posts', { headers: { Origin: 'https://mikufans.site' } });
+  assertEq(a.status, 200);
+  assertEq(a.headers.get('Access-Control-Allow-Origin'), 'https://mikufans.site');
+  assertEq(a.headers.get('Vary'), 'Origin');
+  assert(!a.headers.get('Access-Control-Allow-Credentials'), 'public CORS must not set Credentials');
+  const b = await call(env, '/api/posts', { headers: { Origin: 'https://evil.example' } });
+  assertEq(b.status, 200);
+  assert(!b.headers.get('Access-Control-Allow-Origin'), 'non-whitelist origin got CORS');
+  const c = await call(env, '/api/posts', { method: 'OPTIONS', headers: { Origin: 'https://www.mikufans.site' } });
+  assertEq(c.status, 204);
+  assertEq(c.headers.get('Access-Control-Allow-Origin'), 'https://www.mikufans.site');
+  const d = await call(env, '/api/posts?status=all', { headers: { Origin: 'https://mikufans.site' } });
+  assertEq(d.status, 401);
+  assert(!d.headers.get('Access-Control-Allow-Origin'), 'status=all should not get public CORS');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

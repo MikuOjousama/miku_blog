@@ -11,7 +11,7 @@ import foreverHtml from './forever.html';
 const CATEGORIES = ['covers', 'essays', 'moods', 'blog'];
 const CATEGORY_LABEL = { covers: '翻唱', essays: '随笔', moods: '心情', blog: '折腾日记' };
 const SLUG_PREFIX = { covers: 'c', essays: 'e', moods: 'm', blog: 'a' };
-const POST_COLUMNS = 'id, title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at';
+const POST_COLUMNS = 'id, title, slug, category, content, excerpt, status, author, tags, created_at, updated_at, published_at';
 
 // ---------- 小工具 ----------
 function nowSql() {
@@ -130,7 +130,34 @@ async function nextShortSlug(env, category, extra) {
   return prefix + (max + 1 + (extra || 0));
 }
 
-// ---------- CORS：只允许同源，不设 * ----------
+// ---------- 标签 ----------
+// 清洗标签：字符串数组，最多 10 个，每项 trim 后去空，每项最多 20 字。
+function parseTags(v) {
+  if (!Array.isArray(v)) return [];
+  const out = [];
+  for (const t of v) {
+    if (typeof t !== 'string') continue;
+    const s = t.trim().slice(0, 20);
+    if (s) out.push(s);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+// 行里的 tags 是 JSON 字符串；解析成数组，null 或解析失败时给 []。
+function withTags(row) {
+  if (!row) return row;
+  let tags = [];
+  if (typeof row.tags === 'string' && row.tags) {
+    try { const p = JSON.parse(row.tags); if (Array.isArray(p)) tags = p; } catch { /* 解析失败则 [] */ }
+  } else if (Array.isArray(row.tags)) tags = row.tags;
+  return { ...row, tags };
+}
+
+// ---------- CORS ----------
+// 默认只允许同源，不设 *。例外：公开 GET /api/posts（已发布列表）允许主站跨域读，
+// 因为主站 mikufans.site（Pages）与接口 our.mikufans.site 不同源；登录、/api/me、
+// status=all/draft、/api/audit、POST/PUT/DELETE 一律仍只认同源。
+const PUBLIC_CORS_ORIGINS = ['https://mikufans.site', 'https://www.mikufans.site'];
 function corsHeaders(request, url) {
   const origin = request.headers.get('Origin');
   if (origin && origin === url.origin) {
@@ -142,24 +169,34 @@ function corsHeaders(request, url) {
   }
   return {};
 }
+// 主站公开读接口用的跨域头：Origin 在白名单里才回，带 Vary: Origin，不带 Credentials。
+function publicPostsCors(request) {
+  const origin = request.headers.get('Origin');
+  if (origin && PUBLIC_CORS_ORIGINS.includes(origin)) {
+    return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
+  }
+  return {};
+}
 
 // ---------- API ----------
 async function handleApi(request, env, url) {
   const cors = corsHeaders(request, url);
   const method = request.method;
+  const path = url.pathname;
 
   if (method === 'OPTIONS') {
+    // 公开读接口的预检：主站跨域也放行（只回 Allow-Origin，不带 Credentials）
+    const pre = path === '/api/posts' ? publicPostsCors(request) : {};
     return new Response(null, {
       status: 204,
       headers: {
         ...cors,
+        ...pre,
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, X-Miku-Key',
       },
     });
   }
-
-  const path = url.pathname;
 
   // GET /api/health
   if (path === '/api/health' && method === 'GET') {
@@ -217,7 +254,9 @@ async function handleApi(request, env, url) {
       const res = await env.DB.prepare(
         `SELECT ${POST_COLUMNS} FROM posts ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
       ).bind(...params, limit, offset).all();
-      return json({ posts: res.results || [], limit, offset }, 200, cors);
+      // 公开列表（已发布）允许主站跨域读；草稿/全部仍只认同源
+      const pc = statusParam === 'published' ? publicPostsCors(request) : {};
+      return json({ posts: (res.results || []).map(withTags), limit, offset }, 200, { ...cors, ...pc });
     } catch { return err('internal', 500); }
   }
 
@@ -246,7 +285,7 @@ async function handleApi(request, env, url) {
       if (!row) return err('not_found', 404);
       // 草稿只对已鉴权者可见；未鉴权时按 404 处理，不透露存在性
       if (row.status !== 'published' && !(await isAuthed(request, env))) return err('not_found', 404);
-      return json(row, 200, cors);
+      return json(withTags(row), 200, cors);
     } catch { return err('internal', 500); }
   }
 
@@ -269,12 +308,13 @@ async function handleApi(request, env, url) {
     const slugAuto = !slug;
     const status = body.status === 'published' ? 'published' : 'draft';
     const author = typeof body.author === 'string' && body.author.trim() ? body.author.trim() : 'Miku';
+    const tags = parseTags(body.tags);
     const now = nowSql();
     const publishedAt = status === 'published' ? now : null;
     async function tryInsert(slugValue) {
       const r = await env.DB.prepare(
-        'INSERT INTO posts (title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).bind(title, slugValue, category, content, excerpt, status, author, now, now, publishedAt).run();
+        'INSERT INTO posts (title, slug, category, content, excerpt, status, author, tags, created_at, updated_at, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).bind(title, slugValue, category, content, excerpt, status, author, JSON.stringify(tags), now, now, publishedAt).run();
       if (!r.success) return null;
       return env.DB.prepare(
         `SELECT ${POST_COLUMNS} FROM posts WHERE id = ?`,
@@ -313,7 +353,7 @@ async function handleApi(request, env, url) {
     }
     if (!row) return err('internal', 500);
     await writeAudit(env, request, '新建', row.id, row.title, CATEGORY_LABEL[category]);
-    return json(row, 201, cors);
+    return json(withTags(row), 201, cors);
   }
 
   // PUT /api/posts/:id  与  DELETE /api/posts/:id
@@ -338,7 +378,8 @@ async function handleApi(request, env, url) {
       try { body = await request.json(); } catch { return err('bad_request', 400); }
       const sets = [];
       const params = [];
-      const allow = ['title', 'slug', 'category', 'content', 'excerpt', 'status', 'author'];
+      const allow = ['title', 'slug', 'category', 'content', 'excerpt', 'status', 'author', 'tags'];
+      const newTagsJson = body.tags !== undefined ? JSON.stringify(parseTags(body.tags)) : null;
       for (const k of allow) {
         if (body[k] === undefined) continue;
         if (k === 'title') {
@@ -355,6 +396,8 @@ async function handleApi(request, env, url) {
         } else if (k === 'status') {
           if (!['draft', 'published'].includes(body.status)) return err('invalid_status', 400);
           sets.push('status = ?'); params.push(body.status);
+        } else if (k === 'tags') {
+          sets.push('tags = ?'); params.push(newTagsJson);
         } else {
           sets.push(`${k} = ?`); params.push(typeof body[k] === 'string' ? body[k] : '');
         }
@@ -389,10 +432,11 @@ async function handleApi(request, env, url) {
         if (body.content !== undefined && body.content !== existing.content) changedNames.push('正文');
         if (body.excerpt !== undefined && body.excerpt.trim() !== (existing.excerpt || '')) changedNames.push('摘要');
         if (body.author !== undefined && body.author !== existing.author) changedNames.push('作者');
+        if (newTagsJson !== null && newTagsJson !== JSON.stringify(withTags(existing).tags)) changedNames.push('标签');
         detail = changedNames.length ? changedNames.join('、') + '已更新' : '无字段变化';
       }
       await writeAudit(env, request, action, row.id, row.title, detail);
-      return json(row, 200, cors);
+      return json(withTags(row), 200, cors);
     } catch (e) {
       if (e && e.message === 'slug_conflict') return err('slug_conflict', 409);
       return err('internal', 500);
@@ -412,7 +456,7 @@ function routeInfoPage(host) {
 <style>body{margin:0;background:#f7f3e9;color:#1c2b2a;font-family:Georgia,'Songti SC',serif;line-height:1.8;padding:40px 20px}main{max-width:640px;margin:0 auto}h1{font-size:24px}a{color:#0e7a72}code{background:#e9e4d6;padding:1px 5px}</style></head><body><main>
 <h1>MikuFans CMS</h1>
 <p>当前 host：<code>${host}</code></p>
-<p>这是 MikuFans 的后端 Worker，不是主站。主站 mikufans.site 是 Cloudflare Pages，与本 Worker 无关。</p>
+<p>这是 MikuFans 的后端 Worker，不是主站。主站 mikufans.site 是 Cloudflare Pages，文章列表与正文读本 Worker 的 <code>/api/posts</code> 接口。</p>
 <ul>
 <li><a href="/admin">管理后台 /admin</a> —— 登录后写文章（翻唱 / 随笔 / 心情 / 折腾日记）</li>
 <li><code>GET /api/health</code> —— 健康检查</li>

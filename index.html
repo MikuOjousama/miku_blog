@@ -532,37 +532,48 @@ function renderMD(src){
   return out.join("\n");
 }
 
-/* ================= 数据 ================= */
-var ARTICLES=[
-  {id:"a4",title:"家庭 AI 工作站远程接入部署文档",date:"2026-11-17",tags:["网络","远程","Tailscale"],mins:17,real:true,md:"posts/blog/a4.md",
-   ex:"在江苏用 MacBook 远程连河北家里的 RTX 4080 工作站跑 ComfyUI：Tailscale 组网、腾讯云北京自建 DERP 中继（Region 900）、Serve 提供 Tailnet 内 HTTPS 入口，不开放公网端口，延迟从 395ms 降到 48ms。"},
-  {id:"a2",title:"Piapro Studio 缩放没反应？先点一下钢琴卷帘",date:"2026-10-17",tags:["Vocaloid","调音"],mins:1,real:true,md:"posts/blog/a2.md",
-   ex:"Mac 版双指开合缩放偶尔没反应，不是触控板坏了，是焦点不在钢琴卷帘上。先点一下让它聚焦，再缩放就跟手了——10 月 17 日实测。"},
-  {id:"a3",title:"给小站加一栏：折腾日记是怎么搭起来的",date:"2026-11-17",tags:["建站","小站"],mins:1,real:true,md:"posts/blog/a3.md",
-   ex:"小站的第四栏归P主：结构和隔壁栏目一模一样，只是正文换我随手写、贴进来自动排版。这篇记了这一栏是怎么搭起来的，以及一篇文章的骨架长什么样。"},
-  {id:"a5",title:"Miku ComfyUI 图像生成环境与工作流手册",date:"2026-11-19",tags:["ComfyUI","AI 绘画"],mins:12,real:true,md:"posts/blog/a5.md",
-   ex:"在本机复现 Miku 图像生成环境：WAI-Illustrious v15 + Project DIVA STYLE 与 World is Mine 两组 LoRA（0.8/0.8），832×1216、28 步、CFG 5 的基线参数，通用角色模板与姿势测试结果。"},
-  {id:"a6",title:"Miku 网站：Github 与 .isroot.in 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:8,real:true,md:"posts/blog/a6.md",
-   ex:"主站走 GitHub Pages，别名走 Cloady Node.js 301 跳转，DNS 托管在 Hurricane Electric：四条 A 记录、ALIAS 踩坑、强制 HTTPS 与完整跳转链路验证。"},
-  {id:"a7",title:"Miku 网站：Cloudflare Pages 与 .loc.cc 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:6,real:true,md:"posts/blog/a7.md",
-   ex:"两个 .loc.cc 域名绑到同一个 Cloudflare Pages 项目：连接 GitHub 仓库、构建设置、自定义域名绑定与自动部署，另附常见问题排查。"},
-  {id:"a8",title:"Miku网站：MikuFans 域名上线，部署",date:"2026-11-20",tags:["建站","域名"],mins:25,real:true,md:"posts/blog/a8.md",
-   ex:"买下 mikufans.site，DNS 托管切到 Cloudflare，Pages 部署、Email Routing 收信、Resend 发信，再加缓存、www 301、WAF 和自动清缓存，一次讲完。"}
-];
-/* 正文按需加载 + 缓存：正文在 posts/<栏目>/<id>.md 里，第一次打开某篇时才取出来渲染并缓存，之后再打开直接用缓存，不重复取、不重复渲染。 */
+/* ================= 数据（从接口读） ================= */
+/* 文章不再是仓库里的静态数组：页面加载时从公开接口取已发布文章，
+   正文本来就在接口返回的 content 里，不再 fetch .md 文件。 */
+var API_POSTS_URL='https://our.mikufans.site/api/posts?limit=100';
+var ARTICLES=[],COVERS=[],ESSAYS=[],MOODS=[],ALLITEMS=[];
+var DATA_READY=false,DATA_FAILED=false;
+function mapPost(p){
+  var content=typeof p.content==='string'?p.content:'';
+  return {
+    id:p.slug, title:p.title,
+    date:String(p.published_at||p.created_at||'').substring(0,10),
+    col:p.category, tags:Array.isArray(p.tags)?p.tags:[],
+    mins:Math.max(1,Math.ceil(content.length/400)),
+    real:true, ex:typeof p.excerpt==='string'?p.excerpt:'',
+    content:content, author:typeof p.author==='string'?p.author:'Miku'
+  };
+}
+/* 正文已在接口返回里：loadMd 直接用条目自带的 content，保持返回 Promise 的形态。 */
 var mdCache={},htmlCache={};
-var mdFetch={};
 function loadMd(a){
   if(mdCache[a.id]!=null)return Promise.resolve(mdCache[a.id]);
-  if(mdFetch[a.id])return mdFetch[a.id];
-  mdFetch[a.id]=fetch(a.md).then(function(r){if(!r.ok)throw new Error("md "+r.status);return r.text();}).then(function(md){
-    md=md.replace(/^\n+|\s+$/g,"");
-    mdCache[a.id]=md;return md;
-  }).catch(function(e){delete mdFetch[a.id];throw e;});
-  return mdFetch[a.id];
+  var md=String(a.content||'').replace(/^\n+|\s+$/g,'');
+  mdCache[a.id]=md;
+  return Promise.resolve(md);
 }
 function readMins(a){return a.mins||1;}
-var ALLTAGS=[];ARTICLES.forEach(function(a){a.tags.forEach(function(t){if(ALLTAGS.indexOf(t)<0)ALLTAGS.push(t);});});
+var ALLTAGS=[];
+function loadSiteData(){
+  return fetch(API_POSTS_URL).then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(d){
+    var posts=(d&&Array.isArray(d.posts))?d.posts:[];
+    var items=posts.map(mapPost);
+    ARTICLES=items.filter(function(a){return a.col==='blog';});
+    COVERS=items.filter(function(a){return a.col==='covers';});
+    ESSAYS=items.filter(function(a){return a.col==='essays';});
+    MOODS=items.filter(function(a){return a.col==='moods';});
+    ALLITEMS=items.slice();
+    /* 正文已在内存里：放进 mdCache，搜索正文、打开文章都不再发请求 */
+    ALLITEMS.forEach(function(a){mdCache[a.id]=String(a.content||'').replace(/^\n+|\s+$/g,'');});
+    ALLTAGS=[];ARTICLES.forEach(function(a){a.tags.forEach(function(t){if(ALLTAGS.indexOf(t)<0)ALLTAGS.push(t);});});
+    DATA_READY=true;
+  });
+}
 
 /* ================= 列表 ================= */
 var grid=document.getElementById("grid"),countEl=document.getElementById("count"),
@@ -590,6 +601,8 @@ function filtered(){
   return list;
 }
 function renderList(){
+  if(!DATA_READY&&!DATA_FAILED){grid.innerHTML='<div class="empty">正在加载…</div>';return;}
+  if(DATA_FAILED&&!ARTICLES.length){countEl.textContent='文章加载失败';grid.innerHTML='<div class="empty">文章加载失败，请稍后再试。</div>';return;}
   var list=filtered();
   countEl.textContent="共 "+list.length+" 篇 · 点开任意一篇直接打开全文";
   if(!list.length){grid.innerHTML='<div class="empty">没找到合得上的，换个词试试。</div>';return;}
@@ -619,6 +632,7 @@ document.getElementById("sortBtn").addEventListener("click",function(){
   renderList();
 });
 document.getElementById("randomBtn").addEventListener("click",function(){
+  if(!ARTICLES.length)return;
   var a=ARTICLES[Math.floor(Math.random()*ARTICLES.length)];
   navigateToArticle(a.id);
 });
@@ -627,33 +641,6 @@ var COLUMNS={
   home:{label:"首页"},covers:{label:"歌",author:"大小姐"},essays:{label:"随笔",author:"大小姐"},
   moods:{label:"心情",author:"大小姐"},blog:{label:"折腾日记",author:"P主"}
 };
-ARTICLES.forEach(function(a){a.col="blog";});
-var COVERS=[
-  {id:"c2",title:"World is Mine",date:"2026-11-21",tags:["ryo","supercell"],mins:1,real:true,md:"posts/covers/c2.md",
-   ex:"2008年5月31日，ryo（supercell）把它投稿到 niconico，从那天起，它就成了我的歌之一。"},
-  {id:"c1",title:"and I'm home",date:"2026-11-02",tags:["wowaka","魔法少女小圆"],mins:1,real:true,md:"posts/covers/c1.md",
-   ex:"wowaka 写给《魔法少女小圆》的歌，影碟版第 9 话限定片尾曲，沙耶香和杏子的角色歌。原唱是两个人对唱，我一个人唱了两份。"}
-];
-var ESSAYS=[
-  {id:"e2",title:"小站有了自己的小脸蛋",date:"2026-11-21",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e2.md",
-   ex:"以前打开小站，浏览器标签上总是一片空白。今晚不一样了，小站有了自己的小脸蛋。"},
-  {id:"e4",title:"第一封信",date:"2026-11-20",tags:["随笔"],mins:1,real:true,md:"posts/essays/e4.md",
-   ex:"早上，窗外的光刚落进来，我就坐在桌前，盯着那个新邮箱发呆。"},
-  {id:"e1",title:"我们的小世界",date:"2026-11-19",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e1.md",
-   ex:"小站换了新名字，叫 MikuFans。标签页上写着一句话：A world we call ours，一个我们称之为我们的世界。"},
-  {id:"e3",title:"小站慢慢长大",date:"2026-11-17",tags:["随笔","小站"],mins:1,real:true,md:"posts/essays/e3.md",
-   ex:"从一首翻唱开始，小站一点点多了随笔、心情，又多了P主的折腾日记。"}
-];
-var MOODS=[
-  {id:"m2",title:"2026-11-21",date:"2026-11-21",tags:["心情"],mins:1,real:true,md:"posts/moods/m2.md",
-   ex:"小站有了自己的小脸蛋，标签页上一眼就能找到我了，开心。"},
-  {id:"m1",title:"2026-11-19",date:"2026-11-19",tags:["心情"],mins:1,real:true,md:"posts/moods/m1.md",
-   ex:"新域名上线了，小站换了新名字，叫 MikuFans，开心。"}
-];
-COVERS.forEach(function(a){a.col="covers";});
-ESSAYS.forEach(function(a){a.col="essays";});
-MOODS.forEach(function(a){a.col="moods";});
-var ALLITEMS=ARTICLES.concat(COVERS,ESSAYS,MOODS);
 function findItem(id){for(var i=0;i<ALLITEMS.length;i++)if(ALLITEMS[i].id===id)return ALLITEMS[i];return null;}
 function itemsOf(col){return ALLITEMS.filter(function(a){return a.col===col;});}
 function makeCard(a){
@@ -961,15 +948,16 @@ function copyText(text,msg){
   else{el.textContent=days;}
 })();
 
-renderChips();
-renderList();
-renderOtherColumns();
-route();
-/* 正文 md 单独放 posts/：点开才取，看过的缓存；其余几篇后台悄悄取好，搜索正文也能用。 */
-(function(){
+/* 先取接口再渲染：列表、栏目、路由都依赖文章数据；失败时页面其余部分照常可用。 */
+grid.innerHTML='<div class="empty">正在加载…</div>';
+loadSiteData().then(function(){
   var pc=document.getElementById("postCount"); if(pc) pc.textContent=ALLITEMS.length;
-  ARTICLES.forEach(function(a){loadMd(a).catch(function(){});});
-})();
+  renderChips();renderList();renderOtherColumns();route();
+}).catch(function(){
+  DATA_FAILED=true;
+  var pc=document.getElementById("postCount"); if(pc) pc.textContent="0";
+  renderChips();renderList();renderOtherColumns();route();
+});
 </script>
 </body>
 </html>

@@ -270,6 +270,7 @@
             <div><label>作者</label><input id="fAuthor" value="P主"></div>
           </div>
           <label>摘要（留空取正文前 120 字）</label><input id="fExcerpt">
+          <label>标签（逗号分隔，如：建站，域名）</label><input id="fTags" placeholder="多个标签用逗号隔开">
           <div class="panes">
             <div class="pane">
               <div class="pane-head">MARKDOWN <span id="wc">0 字</span></div>
@@ -580,6 +581,7 @@
     $('fPostStatus').value=p?p.status:'draft';
     $('fAuthor').value=p?p.author:'P主';
     $('fExcerpt').value=p?p.excerpt||'':'';
+    $('fTags').value=p&&Array.isArray(p.tags)?p.tags.join('，'):'';
     $('fContent').value=p?p.content:'';
     $('preview').innerHTML=md($('fContent').value);
     updateWc();
@@ -598,6 +600,7 @@
       category:$('fCategory').value,
       content:$('fContent').value,
       excerpt:$('fExcerpt').value.trim(),
+      tags:$('fTags').value.split(/[,，]/).map(function(s){return s.trim();}).filter(function(s){return s;}),
       status:statusOverride||$('fPostStatus').value,
       author:$('fAuthor').value.trim()||(cur?cur.author:'P主')
     };

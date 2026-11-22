@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>管理后台 · MikuFans CMS</title>
+<link rel="icon" href="https://mikufans.site/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" sizes="180x180" href="https://mikufans.site/apple-touch-icon.png">
 <style>
   /* 配色与组件样式移植自 MikuFans 后台预览（mikufans-hou-tai-yu-lan）：
      浅色底 #f3f6f6、卡片白、主色苍绿 #12a594（注意：预览实际用的不是 #39C5BB）。
@@ -42,7 +44,7 @@
   .app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
   .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
   .brand{display:flex;gap:10px;align-items:center;padding:2px 8px 16px}
-  a.brand{text-decoration:none;color:inherit}
+  a.brand-name{text-decoration:none;color:inherit}
   .brand-mark{width:38px;height:38px;border-radius:11px;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;flex:none}
   .brand-name{font-size:16px;font-weight:700;letter-spacing:.02em;line-height:1.15}
   .brand-sub{font-size:11px;color:var(--muted)}
@@ -198,10 +200,10 @@
 
 <section id="loginBox">
   <div class="login-card">
-    <a class="brand" href="https://mikufans.site" style="justify-content:center;padding-bottom:8px">
+    <div class="brand" style="justify-content:center;padding-bottom:8px">
       <div class="brand-mark">♪</div>
-      <div><div class="brand-name">MikuFans</div><div class="brand-sub">管理后台 · Admin</div></div>
-    </a>
+      <div><a class="brand-name" href="https://mikufans.site">MikuFans</a><div class="brand-sub">管理后台 · Admin</div></div>
+    </div>
     <h1>MikuFans 管理后台</h1>
     <p class="muted lead">翻唱 / 随笔 / 心情 / 折腾日记 —— 写完保存草稿，或直接发布。</p>
     <p class="muted" style="font-size:12.5px">请先登录。未设置后台密码时，请先在 Cloudflare 控制台设置 <code>ADMIN_PASSWORD</code>，或开启 Cloudflare Access。</p>
@@ -214,10 +216,10 @@
 
 <div id="app" class="app hidden">
   <aside class="sidebar">
-    <a class="brand" href="https://mikufans.site">
+    <div class="brand">
       <div class="brand-mark">♪</div>
-      <div><div class="brand-name">MikuFans</div><div class="brand-sub">管理后台 · Admin</div></div>
-    </a>
+      <div><a class="brand-name" href="https://mikufans.site">MikuFans</a><div class="brand-sub">管理后台 · Admin</div></div>
+    </div>
     <nav class="nav">
       <div class="nav-label">内容</div>
       <button type="button" class="nav-item active" data-nav="all"><span class="ico">▦</span>仪表盘</button>

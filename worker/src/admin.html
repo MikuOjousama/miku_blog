@@ -28,8 +28,15 @@
   a{color:var(--teal-deep)}
   .hidden{display:none!important}
   .muted{color:var(--muted);font-size:12px}
-  #err{display:none;max-width:1240px;margin:14px auto 0;padding:10px 14px;background:#fbe9e4;border:1px solid #d98a76;color:#7a2e1e;border-radius:10px;font-size:14px}
-  #err.show{display:block}
+  /* 报错 / 成功小窗：浏览器中间居中弹窗，点遮罩 / 知道了 / Esc 关闭 */
+  #errModal,#okModal{display:none;position:fixed;inset:0;background:rgba(10,25,22,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
+  #errModal.show,#okModal.show{display:flex}
+  .modal-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-width:420px;width:100%;padding:22px}
+  .modal-card h3{margin:0 0 8px;font-size:16px}
+  .modal-card p{margin:0 0 16px;font-size:14px;color:var(--muted);line-height:1.7;word-break:break-word}
+  .modal-card .btn{width:100%}
+  /* 请求中的按钮：变灰、点不了，防重复提交 */
+  .btn:disabled{opacity:.55;cursor:not-allowed}
   .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,80px);background:var(--ink);color:var(--bg);font-size:13.5px;font-weight:600;padding:12px 20px;border-radius:99px;transition:transform .3s,opacity .3s;opacity:0;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
   .toast.show{transform:translate(-50%,0);opacity:1}
   @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
@@ -125,7 +132,7 @@
   .pane+.pane{border-left:1px solid var(--line)}
   .pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 16px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--line);background:var(--panel-2)}
   .pane-head span{font-weight:500;letter-spacing:0}
-  #fContent{width:100%;min-height:340px;border:0;padding:16px;font-size:13.5px;line-height:1.75;resize:vertical;background:transparent}
+  #fContent{width:100%;min-height:340px;border:0;padding:16px;font-size:13.5px;line-height:1.75;resize:none;overflow:hidden;background:transparent}
   #fContent:focus{outline:none}
   #preview{padding:16px 20px;min-height:340px;font-size:14.5px;line-height:1.85}
   #preview h2{font-size:23px}
@@ -216,7 +223,20 @@
 </style>
 </head>
 <body>
-<div id="err" role="alert"></div>
+<div id="errModal" role="alertdialog" aria-modal="true" aria-labelledby="errTitle">
+  <div class="modal-card">
+    <h3 id="errTitle">出错了</h3>
+    <p id="errText"></p>
+    <button type="button" class="btn primary" id="errCloseBtn">知道了</button>
+  </div>
+</div>
+<div id="okModal" role="alertdialog" aria-modal="true" aria-labelledby="okTitle">
+  <div class="modal-card">
+    <h3 id="okTitle">成功</h3>
+    <p id="okText"></p>
+    <button type="button" class="btn primary" id="okCloseBtn">知道了</button>
+  </div>
+</div>
 
 <section id="loginBox">
   <div class="login-card">
@@ -282,7 +302,7 @@
       </section>
 
       <section class="card" id="viewsCard" style="margin-bottom:18px">
-        <div class="card-head"><h2>访问量</h2><span class="muted" style="font-size:12px">从本次上线起开始计数，之前没有记录，补不回来</span><button type="button" class="linklike" id="viewsRefresh">刷新</button></div>
+        <div class="card-head"><h2>访问量</h2><button type="button" class="linklike" id="viewsRefresh">刷新</button></div>
         <div class="views-grid">
           <div class="views-num"><div class="k">总访问量</div><div class="v" id="viewsTotal">—</div><div class="muted" style="font-size:12px">首页 + 各篇文章合计</div></div>
           <div class="views-num"><div class="k">今日</div><div class="v" id="viewsToday">—</div><div class="muted" style="font-size:12px" id="viewsTodayDate">—</div></div>
@@ -363,9 +383,23 @@
 <div id="toast" class="toast" role="status"></div>
 <script>
 (function(){
-  var errBox=document.getElementById('err');
-  function showErr(m){errBox.textContent=m;errBox.classList.add('show');}
-  function clearErr(){errBox.textContent='';errBox.classList.remove('show');}
+  // 报错走居中小窗，不再用顶部横幅
+  var errModal=document.getElementById('errModal');
+  function showErr(m){document.getElementById('errText').textContent=m;errModal.classList.add('show');}
+  function clearErr(){errModal.classList.remove('show');}
+  document.getElementById('errCloseBtn').onclick=clearErr;
+  errModal.addEventListener('click',function(e){if(e.target===errModal)clearErr();});
+  // 成功小窗：与报错小窗同款
+  var okModal=document.getElementById('okModal');
+  function showOk(m){document.getElementById('okText').textContent=m;okModal.classList.add('show');}
+  function clearOk(){okModal.classList.remove('show');}
+  document.getElementById('okCloseBtn').onclick=clearOk;
+  okModal.addEventListener('click',function(e){if(e.target===okModal)clearOk();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){clearErr();clearOk();}});
+  // 编辑器按钮组：请求中全部禁用，防重复提交
+  function setEditorBusy(b){
+    ['saveBtn','publishBtn','unpublishBtn','deleteBtn'].forEach(function(id){$(id).disabled=b;});
+  }
   function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   // Markdown 转 HTML：与前台 renderMD 同一套能力（标题 #~######、行内代码、
   // **粗体**、*斜体*、链接、图片、代码块、列表、表格、引用、分割线）；先转义 HTML 防 XSS。
@@ -483,12 +517,17 @@
   }
   $('loginBtn').onclick=async function(){
     clearErr();
+    var btn=$('loginBtn');
+    if(btn.disabled)return;
+    btn.disabled=true;
     try{
       await api('/api/login',{method:'POST',body:JSON.stringify({password:$('pw').value})});
       $('pw').value='';setAuthUI(true);
     }catch(e){
       if(String(e.message).indexOf('admin_password_not_set')>=0)showErr('后台密码未设置：请先在 Cloudflare 控制台设置 ADMIN_PASSWORD，或开启 Cloudflare Access。');
       else showErr('登录失败：密码不正确。');
+    }finally{
+      btn.disabled=false;
     }
   };
   $('logoutBtn').onclick=async function(){try{await api('/api/logout',{method:'POST',body:'{}'});}catch(e){}setAuthUI(false);};
@@ -662,9 +701,9 @@
       a.href=url;a.download=fname;
       document.body.appendChild(a);a.click();a.remove();
       URL.revokeObjectURL(url);
-      showToast('已导出 '+posts.length+' 篇文章');
+      showOk('已导出 '+posts.length+' 篇文章（已发布 '+pub+' 篇，草稿 '+draft+' 篇）。');
     }catch(e){
-      showToast('导出失败，请重试');
+      showErr('导出失败，请重试');
     }finally{
       btn.disabled=false;
     }
@@ -672,6 +711,12 @@
   function updateWc(){
     var v=$('fContent').value||'';
     $('wc').textContent=v.length+' 字';
+  }
+  // 编辑框跟着字数自动长高：整篇都能在窗口里显示，不用在框里滚
+  function autoGrow(){
+    var t=$('fContent');
+    t.style.height='auto';
+    t.style.height=Math.max(340,t.scrollHeight)+'px';
   }
   function openEditor(id){
     clearErr();
@@ -692,12 +737,13 @@
     $('preview').innerHTML=md($('fContent').value);
     updateWc();
     $('editor').classList.remove('hidden');
+    autoGrow();
     $('deleteBtn').style.display=p?'':'none';
     $('editor').scrollIntoView();
   }
   $('newBtn').onclick=function(){openEditor(null);};
   $('cancelBtn').onclick=function(){$('editor').classList.add('hidden');editingId=null;};
-  $('fContent').oninput=function(){$('preview').innerHTML=md($('fContent').value);updateWc();};
+  $('fContent').oninput=function(){$('preview').innerHTML=md($('fContent').value);updateWc();autoGrow();};
   function formBody(statusOverride){
     // 不发 slug：新建由后端自动生成短编号，编辑时后端保持原 slug 不变
     var cur=editingId?allPosts.find(function(x){return x.id===editingId;}):null;
@@ -711,36 +757,49 @@
       author:$('fAuthor').value.trim()||(cur?cur.author:'P主')
     };
   }
+  var saving=false;
   async function save(statusOverride){
+    if(saving)return;
     clearErr();
     var body=formBody(statusOverride);
     if(!body.title){showErr('标题是必填的。');return;}
+    saving=true;setEditorBusy(true);
     try{
       var d;
       if(editingId){d=await api('/api/posts/'+editingId,{method:'PUT',body:JSON.stringify(body)});}
       else{d=await api('/api/posts',{method:'POST',body:JSON.stringify(body)});}
       editingId=d.id;
       await loadList();openEditor(d.id);loadAudit();
+      showOk(body.status==='published'?'已发布「'+body.title+'」。':'已保存为草稿「'+body.title+'」。');
     }catch(e){
       if(String(e.message).indexOf('slug_conflict')>=0)showErr('保存失败：slug 冲突，请再试一次。');
       else if(String(e.message).indexOf('invalid_category')>=0)showErr('保存失败：栏目只能是 covers / essays / moods / blog。');
       else showErr('保存失败：'+e.message);
+    }finally{
+      saving=false;setEditorBusy(false);
     }
   }
   $('saveBtn').onclick=function(){save();};
   $('publishBtn').onclick=function(){save('published');};
   $('unpublishBtn').onclick=function(){save('draft');};
   // 列表行尾的删除按钮与编辑器内的删除共用：确认框 → DELETE → 刷新列表与动态
+  var deleting=false;
   async function deletePost(id){
+    if(deleting)return;
     var p=allPosts.find(function(x){return x.id===id;});
     if(!p)return;
     if(!confirm('确定要删除「'+p.title+'」吗？删了就找不回来了。'))return;
     clearErr();
+    deleting=true;$('deleteBtn').disabled=true;
     try{
       await api('/api/posts/'+id,{method:'DELETE'});
       if(editingId===id){editingId=null;$('editor').classList.add('hidden');}
       await loadList();loadAudit();
+      showOk('已删除「'+p.title+'」。');
     }catch(e){showErr('删除失败：'+e.message);}
+    finally{
+      deleting=false;$('deleteBtn').disabled=false;
+    }
   }
   $('deleteBtn').onclick=function(){if(editingId)deletePost(editingId);};
   checkMe();

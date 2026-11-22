@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理后台 · MikuFans CMS</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f7f3e9;color:#1c2b2a;font-family:Georgia,'Songti SC','Noto Serif SC',serif;line-height:1.7}
+  main{max-width:760px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#6b7a78;font-size:13px;margin:0 0 20px}
+  a{color:#0e7a72}
+  .line{border:0;border-top:1px solid #39C5BB;margin:18px 0;opacity:.6}
+  input,select,textarea{width:100%;padding:9px 10px;border:1px solid #c9c2ae;border-radius:4px;background:#fffdf6;color:#1c2b2a;font:inherit;font-size:14px}
+  textarea{font-family:ui-monospace,Menlo,monospace}
+  label{display:block;font-size:13px;color:#5c6b69;margin:12px 0 4px}
+  button{border:1px solid #39C5BB;background:transparent;color:#0e7a72;border-radius:999px;padding:7px 16px;font:inherit;font-size:13px;cursor:pointer}
+  button.primary{background:#39C5BB;color:#fff;border-color:#39C5BB}
+  button.danger{border-color:#b3543f;color:#b3543f}
+  button:disabled{opacity:.5;cursor:default}
+  #err{display:none;background:#fbe9e4;border:1px solid #d98a76;color:#7a2e1e;padding:10px 12px;border-radius:4px;margin:0 0 14px;font-size:14px}
+  #err.show{display:block}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .row input,.row select{width:auto;flex:1;min-width:120px}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:12px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd6c2;vertical-align:top}
+  th{color:#6b7a78;font-size:12px}
+  .muted{color:#6b7a78;font-size:12px}
+  #preview{border:1px solid #c9c2ae;border-radius:4px;background:#fffdf6;padding:12px;min-height:80px}
+  #preview pre{background:#efe9d8;padding:10px;overflow:auto}
+  #preview code{background:#efe9d8;padding:1px 4px}
+  #preview pre code{background:none;padding:0}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>MikuFans 管理后台</h1>
+  <p class="sub">翻唱 / 随笔 / 心情 / 折腾日记 —— 写完保存草稿，或直接发布。</p>
+  <div id="err" role="alert"></div>
+
+  <section id="loginBox">
+    <p>请先登录。未设置后台密码时，请先在 Cloudflare 控制台设置 <code>ADMIN_PASSWORD</code>，或开启 Cloudflare Access。</p>
+    <label>后台密码</label>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="输入 ADMIN_PASSWORD">
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="loginBtn">登录</button>
+    </div>
+    <p class="muted">登录后 7 天内不用重复登录。也可以用 Cloudflare Access 或 X-Miku-Key。</p>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="row">
+      <span id="who" class="muted">已登录</span>
+      <button id="logoutBtn">退出登录</button>
+      <button class="primary" id="newBtn">写新文章</button>
+    </div>
+    <hr class="line">
+    <div class="row">
+      <select id="fCat"><option value="">全部栏目</option><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
+      <select id="fStatus"><option value="all">全部状态</option><option value="published">已发布</option><option value="draft">草稿</option></select>
+      <input id="fQ" type="search" placeholder="按标题搜索…">
+      <button id="refreshBtn">刷新</button>
+    </div>
+    <table>
+      <thead><tr><th>标题</th><th>栏目</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+    <p id="empty" class="muted hidden">还没有文章，先写一篇吧。</p>
+
+    <hr class="line">
+    <section id="editor" class="hidden">
+      <h2 id="edTitle" style="font-size:18px">写新文章</h2>
+      <label>标题 *</label><input id="fTitle">
+      <div class="row">
+        <div style="flex:1"><label>slug（留空自动生成）</label><input id="fSlug" placeholder="post-…"></div>
+        <div style="flex:1"><label>栏目 *</label><select id="fCategory"><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select></div>
+      </div>
+      <div class="row">
+        <div style="flex:1"><label>状态</label><select id="fPostStatus"><option value="draft">草稿</option><option value="published">已发布</option></select></div>
+        <div style="flex:1"><label>作者</label><input id="fAuthor" value="Miku"></div>
+      </div>
+      <label>摘要（留空取正文前 120 字）</label><input id="fExcerpt">
+      <label>Markdown 正文</label>
+      <textarea id="fContent" rows="14" placeholder="支持 # / ##、**粗体**、*斜体*、[链接](https://…)、代码块"></textarea>
+      <label>实时预览</label>
+      <div id="preview"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="primary" id="saveBtn">保存</button>
+        <button id="publishBtn">发布</button>
+        <button id="unpublishBtn">取消发布</button>
+        <button class="danger" id="deleteBtn">删除</button>
+        <button id="cancelBtn">取消</button>
+      </div>
+    </section>
+  </section>
+  <hr class="line">
+  <p class="muted"><a href="https://mikufans.site">← 回到 MikuFans 主站</a></p>
+</main>
+<script>
+(function(){
+  var errBox=document.getElementById('err');
+  function showErr(m){errBox.textContent=m;errBox.classList.add('show');}
+  function clearErr(){errBox.textContent='';errBox.classList.remove('show');}
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  // 最简 Markdown 转 HTML：只处理代码块、#/##、**粗体**、*斜体*、链接、换行；先转义 HTML 防 XSS
+  function md(src){
+    src=src||'';
+    var blocks=[],i=0;
+    src=src.replace(/```([\s\S]*?)```/g,function(m,c){blocks.push(c);return '\u0000'+(blocks.length-1)+'\u0000';});
+    var lines=src.split('\n'),out=[],inP=false;
+    function flush(){if(inP){out.push('</p>');inP=false;}}
+    function inline(t){
+      t=esc(t);
+      t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+      t=t.replace(/\*([^*]+)\*/g,'<em>$1</em>');
+      t=t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+      return t;
+    }
+    lines.forEach(function(line){
+      var m=line.match(/^\u0000(\d+)\u0000$/);
+      if(m){flush();out.push('<pre><code>'+esc(blocks[+m[1]])+'</code></pre>');return;}
+      if(/^##\s+/.test(line)){flush();out.push('<h3>'+inline(line.replace(/^##\s+/,''))+'</h3>');return;}
+      if(/^#\s+/.test(line)){flush();out.push('<h2>'+inline(line.replace(/^#\s+/,''))+'</h2>');return;}
+      if(!line.trim()){flush();return;}
+      if(!inP){out.push('<p>');inP=true;}else{out.push('<br>');}
+      out.push(inline(line));
+    });
+    flush();
+    return out.join('');
+  }
+  async function api(path,opts){
+    opts=opts||{};
+    var r=await fetch(path,{...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});
+    var d=null;try{d=await r.json();}catch(e){}
+    if(!r.ok)throw new Error((d&&d.error)||('HTTP '+r.status));
+    return d;
+  }
+  var editingId=null,allPosts=[];
+  var $=function(id){return document.getElementById(id);};
+  function setAuthUI(authed){
+    $('loginBox').classList.toggle('hidden',authed);
+    $('app').classList.toggle('hidden',!authed);
+    if(authed)loadList();
+  }
+  async function checkMe(){
+    try{var m=await api('/api/me');setAuthUI(!!m.authed);}catch(e){setAuthUI(false);}
+  }
+  $('loginBtn').onclick=async function(){
+    clearErr();
+    try{
+      await api('/api/login',{method:'POST',body:JSON.stringify({password:$('pw').value})});
+      $('pw').value='';setAuthUI(true);
+    }catch(e){
+      if(String(e.message).indexOf('admin_password_not_set')>=0)showErr('后台密码未设置：请先在 Cloudflare 控制台设置 ADMIN_PASSWORD，或开启 Cloudflare Access。');
+      else showErr('登录失败：密码不正确。');
+    }
+  };
+  $('logoutBtn').onclick=async function(){try{await api('/api/logout',{method:'POST',body:'{}'});}catch(e){}setAuthUI(false);};
+  function renderList(){
+    var cat=$('fCat').value,st=$('fStatus').value,q=$('fQ').value.trim();
+    var rows=allPosts.filter(function(p){
+      if(cat&&p.category!==cat)return false;
+      if(st!=='all'&&p.status!==st)return false;
+      if(q&&p.title.indexOf(q)<0)return false;
+      return true;
+    });
+    $('empty').classList.toggle('hidden',rows.length>0);
+    $('list').innerHTML=rows.map(function(p){
+      return '<tr><td>'+esc(p.title)+'<br><span class="muted">'+esc(p.slug||'')+'</span></td><td>'+esc(p.category)+'</td><td>'+(p.status==='published'?'已发布':'草稿')+'</td><td class="muted">'+esc(p.updated_at||p.created_at||'')+'</td><td><button data-edit="'+p.id+'">编辑</button></td></tr>';
+    }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'),function(b){
+      b.onclick=function(){openEditor(+b.getAttribute('data-edit'));};
+    });
+  }
+  async function loadList(){
+    clearErr();
+    try{
+      var d=await api('/api/posts?status=all&limit=100');
+      allPosts=d.posts||[];renderList();
+    }catch(e){showErr('加载列表失败：'+e.message);}
+  }
+  $('refreshBtn').onclick=loadList;
+  $('fCat').onchange=renderList;$('fStatus').onchange=renderList;$('fQ').oninput=renderList;
+  function openEditor(id){
+    clearErr();
+    var p=id?allPosts.find(function(x){return x.id===id;}):null;
+    editingId=id||null;
+    $('edTitle').textContent=p?'编辑文章':'写新文章';
+    $('fTitle').value=p?p.title:'';
+    $('fSlug').value=p?p.slug:'';
+    $('fCategory').value=p?p.category:'covers';
+    $('fPostStatus').value=p?p.status:'draft';
+    $('fAuthor').value=p?p.author:'Miku';
+    $('fExcerpt').value=p?p.excerpt||'':'';
+    $('fContent').value=p?p.content:'';
+    $('preview').innerHTML=md($('fContent').value);
+    $('editor').classList.remove('hidden');
+    $('deleteBtn').style.display=p?'':'none';
+    $('editor').scrollIntoView();
+  }
+  $('newBtn').onclick=function(){openEditor(null);};
+  $('cancelBtn').onclick=function(){$('editor').classList.add('hidden');editingId=null;};
+  $('fContent').oninput=function(){$('preview').innerHTML=md($('fContent').value);};
+  function formBody(statusOverride){
+    return {
+      title:$('fTitle').value.trim(),
+      slug:$('fSlug').value.trim()||undefined,
+      category:$('fCategory').value,
+      content:$('fContent').value,
+      excerpt:$('fExcerpt').value.trim(),
+      status:statusOverride||$('fPostStatus').value,
+      author:$('fAuthor').value.trim()||'Miku'
+    };
+  }
+  async function save(statusOverride){
+    clearErr();
+    var body=formBody(statusOverride);
+    if(!body.title){showErr('标题是必填的。');return;}
+    try{
+      var d;
+      if(editingId){d=await api('/api/posts/'+editingId,{method:'PUT',body:JSON.stringify(body)});}
+      else{d=await api('/api/posts',{method:'POST',body:JSON.stringify(body)});}
+      editingId=d.id;
+      $('fSlug').value=d.slug||'';
+      await loadList();openEditor(d.id);
+    }catch(e){
+      if(String(e.message).indexOf('slug_conflict')>=0)showErr('保存失败：slug 已被占用，换一个 slug 再试。');
+      else if(String(e.message).indexOf('invalid_category')>=0)showErr('保存失败：栏目只能是 covers / essays / moods / zheteng。');
+      else showErr('保存失败：'+e.message);
+    }
+  }
+  $('saveBtn').onclick=function(){save();};
+  $('publishBtn').onclick=function(){save('published');};
+  $('unpublishBtn').onclick=function(){save('draft');};
+  $('deleteBtn').onclick=async function(){
+    if(!editingId)return;
+    if(!confirm('确定要删除这篇文章吗？删了就找不回来了。'))return;
+    clearErr();
+    try{await api('/api/posts/'+editingId,{method:'DELETE'});editingId=null;$('editor').classList.add('hidden');await loadList();}
+    catch(e){showErr('删除失败：'+e.message);}
+  };
+  checkMe();
+})();
+</script>
+</body>
+</html>

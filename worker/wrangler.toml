@@ -1,0 +1,20 @@
+name = "mikufans-cms"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mikufans-content"
+database_id = "3522f4c0-e1a9-4e40-b0ca-bc5c0b43870d"
+
+# 让 Worker 可以 import .html 当作文本（admin.html / forever.html）
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# 注意：不要在这里写 routes / custom domains。
+# 自定义域名 our.mikufans.site 和 forever.mikufans.site
+# 在 Cloudflare 控制台 → Workers & Pages → mikufans-cms
+# → Settings → Domains and Routes 里添加，两个域名绑同一个 Worker。
+# 不要只做 CNAME，那样流量不会走到 Worker。

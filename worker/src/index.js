@@ -451,6 +451,12 @@ function htmlResponse(html) {
   return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
+// FOREVER 纪念页的 sitemap（forever 是独立域名，不能塞进主站 sitemap，只能在自己域名下放一份）
+const FOREVER_SITEMAP = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://forever.mikufans.site/</loc><lastmod>2026-11-22</lastmod><priority>1.0</priority></url>
+</urlset>`;
+
 function routeInfoPage(host) {
   return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MikuFans CMS</title>
 <style>body{margin:0;background:#f7f3e9;color:#1c2b2a;font-family:Georgia,'Songti SC',serif;line-height:1.8;padding:40px 20px}main{max-width:640px;margin:0 auto}h1{font-size:24px}a{color:#0e7a72}code{background:#e9e4d6;padding:1px 5px}</style></head><body><main>
@@ -479,6 +485,8 @@ export default {
     if (host === 'our.mikufans.site') return htmlResponse(adminHtml);
     if (host === 'forever.mikufans.site') {
       if (url.pathname === '/' || url.pathname === '') return htmlResponse(foreverHtml);
+      if (url.pathname === '/sitemap.xml') return new Response(FOREVER_SITEMAP, { headers: { 'Content-Type': 'application/xml; charset=utf-8' } });
+      if (url.pathname === '/robots.txt') return new Response('User-agent: *\nAllow: /\n\nSitemap: https://forever.mikufans.site/sitemap.xml\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       return new Response('Not Found', { status: 404 });
     }
     // 其他 host（含 workers.dev）

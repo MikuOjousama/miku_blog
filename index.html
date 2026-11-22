@@ -536,6 +536,15 @@ function renderMD(src){
 /* 文章不再是仓库里的静态数组：页面加载时从公开接口取已发布文章，
    正文本来就在接口返回的 content 里，不再 fetch .md 文件。 */
 var API_POSTS_URL='https://our.mikufans.site/api/posts?limit=100';
+/* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
+function trackView(slug){
+  try{
+    var key='mv:'+slug;
+    if(sessionStorage.getItem(key))return;
+    sessionStorage.setItem(key,'1');
+    fetch('https://our.mikufans.site/api/posts/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:slug}),keepalive:true}).catch(function(){});
+  }catch(e){}
+}
 var ARTICLES=[],COVERS=[],ESSAYS=[],MOODS=[],ALLITEMS=[];
 var DATA_READY=false,DATA_FAILED=false;
 function mapPost(p){
@@ -731,6 +740,7 @@ function articleStartY(){
 }
 function showView(view,scrollY,keepScroll){
   cur=null;
+  trackView('home');
   navState={kind:"list",view:view,id:null};
   articleView.hidden=true;listView.hidden=false;
   showPanel(view);syncTabs(view);
@@ -763,6 +773,7 @@ function applyRoute(r,state){
 function openArticle(id,scrollY){
   var it=findItem(id);
   if(!it){showView("home",0);return;}
+  trackView(id);
   cur=it;
   listView.hidden=true;articleView.hidden=false;
   navState={kind:"article",view:it.col,id:id};

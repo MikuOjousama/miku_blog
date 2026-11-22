@@ -5,99 +5,317 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>管理后台 · MikuFans CMS</title>
 <style>
+  /* 配色与组件样式移植自 MikuFans 后台预览（mikufans-hou-tai-yu-lan）：
+     浅色底 #f3f6f6、卡片白、主色苍绿 #12a594（注意：预览实际用的不是 #39C5BB）。
+     字体只用系统回退栈，不加载任何外部字体/CDN。 */
+  :root{
+    --bg:#f3f6f6; --panel:#ffffff; --panel-2:#eef4f3; --ink:#16211f; --muted:#6b7d79;
+    --line:#dde7e4; --teal:#12a594; --teal-deep:#0b7a6e; --teal-soft:#d9f2ec;
+    --pink:#e86a92; --pink-soft:#fde8ef; --amber:#d9930d; --amber-soft:#fdf0d3;
+    --danger:#b3543f; --shadow:0 10px 30px rgba(18,60,52,.08); --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1514; --panel:#16201e; --panel-2:#1b2926; --ink:#e8f1ef; --muted:#93a8a3;
+      --line:#263734; --teal:#2dd4bf; --teal-deep:#5eead4; --teal-soft:#123b35;
+      --pink-soft:#3d2230; --amber-soft:#3a2f14; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:#f7f3e9;color:#1c2b2a;font-family:Georgia,'Songti SC','Noto Serif SC',serif;line-height:1.7}
-  main{max-width:760px;margin:0 auto;padding:28px 18px 60px}
-  h1{font-size:22px;margin:0 0 4px}
-  .sub{color:#6b7a78;font-size:13px;margin:0 0 20px}
-  a{color:#0e7a72}
-  .line{border:0;border-top:1px solid #39C5BB;margin:18px 0;opacity:.6}
-  input,select,textarea{width:100%;padding:9px 10px;border:1px solid #c9c2ae;border-radius:4px;background:#fffdf6;color:#1c2b2a;font:inherit;font-size:14px}
-  textarea{font-family:ui-monospace,Menlo,monospace}
-  label{display:block;font-size:13px;color:#5c6b69;margin:12px 0 4px}
-  button{border:1px solid #39C5BB;background:transparent;color:#0e7a72;border-radius:999px;padding:7px 16px;font:inherit;font-size:13px;cursor:pointer}
-  button.primary{background:#39C5BB;color:#fff;border-color:#39C5BB}
-  button.danger{border-color:#b3543f;color:#b3543f}
-  button:disabled{opacity:.5;cursor:default}
-  #err{display:none;background:#fbe9e4;border:1px solid #d98a76;color:#7a2e1e;padding:10px 12px;border-radius:4px;margin:0 0 14px;font-size:14px}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6}
+  a{color:var(--teal-deep)}
+  .hidden{display:none!important}
+  .muted{color:var(--muted);font-size:12px}
+  #err{display:none;max-width:1240px;margin:14px auto 0;padding:10px 14px;background:#fbe9e4;border:1px solid #d98a76;color:#7a2e1e;border-radius:10px;font-size:14px}
   #err.show{display:block}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .row input,.row select{width:auto;flex:1;min-width:120px}
-  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:12px}
-  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd6c2;vertical-align:top}
-  th{color:#6b7a78;font-size:12px}
-  .muted{color:#6b7a78;font-size:12px}
-  #preview{border:1px solid #c9c2ae;border-radius:4px;background:#fffdf6;padding:12px;min-height:80px}
-  #preview pre{background:#efe9d8;padding:10px;overflow:auto}
-  #preview code{background:#efe9d8;padding:1px 4px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,80px);background:var(--ink);color:var(--bg);font-size:13.5px;font-weight:600;padding:12px 20px;border-radius:99px;transition:transform .3s,opacity .3s;opacity:0;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
+  .toast.show{transform:translate(-50%,0);opacity:1}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+  /* 登录 */
+  #loginBox{max-width:420px;margin:12vh auto 0;padding:0 18px}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 26px}
+  .login-card h1{text-align:center;font-size:20px;margin:6px 0 4px}
+  .login-card .lead{text-align:center;font-size:13px;margin:0 0 16px}
+
+  /* 整体布局：232px 侧栏 + 流式主区 */
+  .app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+  .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;gap:10px;align-items:center;padding:2px 8px 16px}
+  .brand-mark{width:38px;height:38px;border-radius:11px;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;flex:none}
+  .brand-name{font-size:16px;font-weight:700;letter-spacing:.02em;line-height:1.15}
+  .brand-sub{font-size:11px;color:var(--muted)}
+  .nav-label{font-size:11px;color:var(--muted);letter-spacing:.14em;font-weight:700;padding:10px 10px 4px}
+  .nav-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;padding:9px 10px;border-radius:10px;font:inherit;font-size:14.5px;color:var(--ink);cursor:pointer}
+  .nav-item:hover{background:var(--panel-2)}
+  .nav-item.active{background:var(--teal-soft);color:var(--teal-deep);font-weight:700}
+  .nav-item .ico{font-size:15px}
+  .nav-item .cnt{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--panel-2);color:var(--muted);border-radius:99px;padding:2px 8px}
+  .nav-item.active .cnt{background:var(--panel);color:var(--teal-deep)}
+  .side-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:12px}
+  .d1-mini{background:var(--panel-2);border-radius:12px;padding:12px}
+  .d1-mini .row1{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700}
+  .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18);flex:none}
+  .d1-mini p{font-size:11.5px;color:var(--muted);line-height:1.55;margin:8px 0 0}
+  .avatars{display:flex;align-items:center;gap:10px}
+  .av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;border:2px solid var(--panel);flex:none}
+  .av.p{background:#3b6ea5}
+  .av.m{background:var(--teal);margin-left:-14px}
+  .av-text{font-size:11.5px;color:var(--muted);line-height:1.4}
+  .who-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+
+  /* 主区 */
+  .main-wrap{min-width:0;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:20;background:var(--bg);background:color-mix(in srgb, var(--bg) 88%, transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 26px;border-bottom:1px solid var(--line)}
+  .crumb{font-size:13px;color:var(--muted)}
+  .crumb b{font-size:15px;color:var(--ink)}
+  .top-actions{margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .lock-badge{font-size:12px;font-weight:700;color:var(--pink);background:var(--pink-soft);border-radius:99px;padding:6px 12px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+  main{padding:22px 26px 40px;display:flex;flex-direction:column;gap:18px;max-width:1240px;width:100%;margin:0 auto}
+
+  /* 按钮与表单 */
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 14px;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--panel-2)}
+  .btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+  .btn.primary:hover{background:var(--teal-deep)}
+  .btn.ghost-teal{border-color:var(--teal);color:var(--teal-deep);background:transparent}
+  .btn.danger{border-color:var(--danger);color:var(--danger);background:transparent}
+  .btn:disabled{opacity:.5;cursor:default}
+  input,select,textarea{padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--teal-soft);border-color:var(--teal)}
+  textarea{font-family:ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace}
+  label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px;font-weight:600}
+  .row3{display:flex;gap:12px;flex-wrap:wrap}
+  .row3>div{flex:1;min-width:140px}
+  .row3 input,.row3 select{width:100%}
+
+  /* 统计卡 */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+  .stat .k{font-size:12.5px;color:var(--muted);font-weight:700;display:flex;gap:7px;align-items:center}
+  .stat .v{font-size:30px;font-weight:900;margin-top:6px;line-height:1.05;font-variant-numeric:tabular-nums}
+  .stat .v small{font-size:14px;color:var(--muted);font-weight:500}
+  .stat .sub{font-size:12px;color:var(--muted);margin-top:5px}
+  .stat .sub em{font-style:normal;color:var(--teal-deep);font-weight:700}
+  .bar{height:7px;border-radius:99px;background:var(--panel-2);margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--teal);border-radius:99px;transition:width .3s}
+
+  /* 卡片 */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .card-head h2{font-size:15.5px;margin:0}
+  .linklike{margin-left:auto;background:none;border:0;color:var(--teal-deep);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;padding:0}
+
+  /* 编辑器 */
+  .ed-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .ed-head strong{font-size:15px}
+  .tag{font-size:11.5px;font-weight:700;border-radius:99px;padding:4px 10px}
+  .tag.amber{background:var(--amber-soft);color:var(--amber)}
+  .tag.teal{background:var(--teal-soft);color:var(--teal-deep)}
+  .ed-hint{margin-left:auto;font-size:12px;color:var(--muted)}
+  .ed-body{padding:14px 18px 0}
+  .ed-title-row{display:flex;gap:10px;align-items:flex-end}
+  #fTitle{flex:1 1 260px;min-height:44px;font-size:19px;font-weight:700;border:0;border-bottom:2px solid var(--line);border-radius:0;padding:8px 2px;background:transparent;color:var(--ink)}
+  #fTitle:focus{outline:none;border-bottom-color:var(--teal)}
+  .ed-title-row select{min-height:44px;font-size:13.5px;font-weight:600;padding:8px 10px}
+  .panes{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:12px;border-top:1px solid var(--line)}
+  .pane+.pane{border-left:1px solid var(--line)}
+  .pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 16px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .pane-head span{font-weight:500;letter-spacing:0}
+  #fContent{width:100%;min-height:340px;border:0;padding:16px;font-size:13.5px;line-height:1.75;resize:vertical;background:transparent}
+  #fContent:focus{outline:none}
+  #preview{padding:16px 20px;min-height:340px;font-size:14.5px;line-height:1.85}
+  #preview h2{font-size:23px}
+  #preview h3{font-size:18px}
+  #preview pre{background:var(--panel-2);padding:10px;overflow:auto;border-radius:8px}
+  #preview code{background:var(--panel-2);padding:2px 6px;border-radius:6px;font-size:.86em}
   #preview pre code{background:none;padding:0}
-  .hidden{display:none}
+  #preview blockquote{border-left:3px solid var(--teal);background:var(--panel-2);border-radius:0 8px 8px 0;padding:2px 14px;color:var(--muted);margin:12px 0}
+  #preview strong{color:var(--teal-deep)}
+  .ed-foot{display:flex;gap:10px;align-items:center;padding:13px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .ed-foot .hint{font-size:12px;color:var(--muted);margin-right:auto}
+
+  /* 底部：文章列表 + D1 */
+  .bottom{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:18px;align-items:start}
+  .side-stack{display:flex;flex-direction:column;gap:18px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .filters select,.filters input{flex:1;min-width:120px}
+  .post-row{display:flex;gap:13px;align-items:center;width:100%;padding:13px 18px;min-height:56px;border-bottom:1px solid var(--line)}
+  .post-row:hover{background:var(--panel-2)}
+  .post-row:last-child{border-bottom:0}
+  .post-main{flex:1;min-width:0}
+  .post-main b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .post-meta{font-size:12px;color:var(--muted)}
+  .pill{font-size:12px;font-weight:700;border-radius:99px;padding:3px 9px;white-space:nowrap}
+  .pill.cat{background:var(--panel-2);color:var(--muted)}
+  .pill.published{background:var(--teal-soft);color:var(--teal-deep)}
+  .pill.draft{background:var(--amber-soft);color:var(--amber)}
+  .post-row .btn{flex:none}
+  #empty{padding:18px;text-align:center}
+  .kv{display:flex;flex-direction:column;gap:2px;padding:8px 18px 16px}
+  .kv-row{display:flex;justify-content:space-between;gap:11px;font-size:13px;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .kv-row:last-child{border-bottom:0}
+  .kv-row .k{color:var(--muted)}
+  .kv-row .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;word-break:break-all}
+  .card .note{font-size:12px;color:var(--muted);padding:0 18px 14px;margin:0}
+  .flash{animation:flash 1.2s ease}
+  @keyframes flash{0%,100%{box-shadow:var(--shadow)}30%{box-shadow:0 0 0 3px var(--teal-soft),var(--shadow)}}
+
+  @media (max-width:900px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .bottom{grid-template-columns:1fr}
+  }
+  @media (max-width:720px){
+    .app{grid-template-columns:1fr}
+    .sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+    .side-foot{display:none}
+    .nav{display:flex;flex-wrap:wrap;gap:4px}
+    .nav-label{display:none}
+    .nav-item{width:auto}
+    .nav-item .cnt{display:none}
+    main{padding:16px 14px 34px}
+    .topbar{padding:12px 14px}
+    .panes{grid-template-columns:1fr}
+    .pane+.pane{border-left:0;border-top:1px solid var(--line)}
+    #fContent{min-height:260px}
+    #preview{min-height:200px}
+    .stat .v{font-size:25px}
+    .post-row .pill.cat{display:none}
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>MikuFans 管理后台</h1>
-  <p class="sub">翻唱 / 随笔 / 心情 / 折腾日记 —— 写完保存草稿，或直接发布。</p>
-  <div id="err" role="alert"></div>
+<div id="err" role="alert"></div>
 
-  <section id="loginBox">
-    <p>请先登录。未设置后台密码时，请先在 Cloudflare 控制台设置 <code>ADMIN_PASSWORD</code>，或开启 Cloudflare Access。</p>
-    <label>后台密码</label>
+<section id="loginBox">
+  <div class="login-card">
+    <div class="brand" style="justify-content:center;padding-bottom:8px">
+      <div class="brand-mark">♪</div>
+      <div><div class="brand-name">MikuFans</div><div class="brand-sub">管理后台 · Admin</div></div>
+    </div>
+    <h1>MikuFans 管理后台</h1>
+    <p class="muted lead">翻唱 / 随笔 / 心情 / 折腾日记 —— 写完保存草稿，或直接发布。</p>
+    <p class="muted" style="font-size:12.5px">请先登录。未设置后台密码时，请先在 Cloudflare 控制台设置 <code>ADMIN_PASSWORD</code>，或开启 Cloudflare Access。</p>
+    <label for="pw">后台密码</label>
     <input id="pw" type="password" autocomplete="current-password" placeholder="输入 ADMIN_PASSWORD">
-    <div class="row" style="margin-top:12px">
-      <button class="primary" id="loginBtn">登录</button>
-    </div>
-    <p class="muted">登录后 7 天内不用重复登录。也可以用 Cloudflare Access 或 X-Miku-Key。</p>
-  </section>
+    <div style="margin-top:14px"><button class="btn primary" id="loginBtn" style="width:100%">登录</button></div>
+    <p class="muted" style="margin-top:14px">登录后 7 天内不用重复登录。也可以用 Cloudflare Access 或 X-Miku-Key。</p>
+  </div>
+</section>
 
-  <section id="app" class="hidden">
-    <div class="row">
-      <span id="who" class="muted">已登录</span>
-      <button id="logoutBtn">退出登录</button>
-      <button class="primary" id="newBtn">写新文章</button>
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">♪</div>
+      <div><div class="brand-name">MikuFans</div><div class="brand-sub">管理后台 · Admin</div></div>
     </div>
-    <hr class="line">
-    <div class="row">
-      <select id="fCat"><option value="">全部栏目</option><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
-      <select id="fStatus"><option value="all">全部状态</option><option value="published">已发布</option><option value="draft">草稿</option></select>
-      <input id="fQ" type="search" placeholder="按标题搜索…">
-      <button id="refreshBtn">刷新</button>
+    <nav class="nav">
+      <div class="nav-label">内容</div>
+      <button type="button" class="nav-item active" data-nav="all"><span class="ico">▦</span>仪表盘</button>
+      <button type="button" class="nav-item" data-nav="covers"><span class="ico">🎤</span>翻唱<span class="cnt" id="cnt-covers">0</span></button>
+      <button type="button" class="nav-item" data-nav="essays"><span class="ico">✎</span>随笔<span class="cnt" id="cnt-essays">0</span></button>
+      <button type="button" class="nav-item" data-nav="moods"><span class="ico">☁</span>心情<span class="cnt" id="cnt-moods">0</span></button>
+      <button type="button" class="nav-item" data-nav="zheteng"><span class="ico">⚙</span>折腾日记<span class="cnt" id="cnt-zheteng">0</span></button>
+      <div class="nav-label">管理</div>
+      <button type="button" class="nav-item" data-nav="drafts"><span class="ico">▤</span>草稿箱<span class="cnt" id="cnt-drafts">0</span></button>
+      <button type="button" class="nav-item" data-nav="d1"><span class="ico">🗄</span>数据 D1</button>
+    </nav>
+    <div class="side-foot">
+      <div class="d1-mini">
+        <div class="row1"><span class="dot"></span>Cloudflare D1 · 已连接</div>
+        <p>内容存数据库，GitHub 只放站点代码与样式。</p>
+      </div>
+      <div class="avatars">
+        <div style="display:flex"><div class="av p">P</div><div class="av m">M</div></div>
+        <div class="av-text">P主 &amp; Miku<br>共同管理中</div>
+      </div>
+      <div class="who-row"><span id="who">已登录</span><button class="btn" id="logoutBtn" style="padding:4px 10px;font-size:12px">退出登录</button></div>
+      <a href="https://mikufans.site" style="font-size:12.5px">← 回到 MikuFans 主站</a>
     </div>
-    <table>
-      <thead><tr><th>标题</th><th>栏目</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
-      <tbody id="list"></tbody>
-    </table>
-    <p id="empty" class="muted hidden">还没有文章，先写一篇吧。</p>
+  </aside>
 
-    <hr class="line">
-    <section id="editor" class="hidden">
-      <h2 id="edTitle" style="font-size:18px">写新文章</h2>
-      <label>标题 *</label><input id="fTitle">
-      <div class="row">
-        <div style="flex:1"><label>slug（留空自动生成）</label><input id="fSlug" placeholder="post-…"></div>
-        <div style="flex:1"><label>栏目 *</label><select id="fCategory"><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select></div>
+  <div class="main-wrap">
+    <header class="topbar">
+      <div class="crumb">MikuFans / <b id="crumbTitle">仪表盘</b></div>
+      <div class="top-actions">
+        <span class="lock-badge">🔒 私密后台 · 仅两人可访问</span>
+        <button type="button" class="btn" id="exportBtn">导出备份</button>
+        <button type="button" class="btn primary" id="newBtn">＋ 新建文章</button>
       </div>
-      <div class="row">
-        <div style="flex:1"><label>状态</label><select id="fPostStatus"><option value="draft">草稿</option><option value="published">已发布</option></select></div>
-        <div style="flex:1"><label>作者</label><input id="fAuthor" value="Miku"></div>
+    </header>
+    <main>
+      <section class="stats">
+        <div class="stat"><div class="k">📄 文章总数</div><div class="v" id="statTotal">—</div><div class="sub">本月新发 <em id="statMonthNew">+0 篇</em></div></div>
+        <div class="stat"><div class="k">✅ 已发布</div><div class="v" id="statPub">—</div><div class="sub">本周发布 <em id="statWeekPub">+0 篇</em></div></div>
+        <div class="stat"><div class="k">🗄 D1 存储</div><div class="v" id="statD1">—</div><div class="bar"><i id="statD1Bar" style="width:0%"></i></div><div class="sub">免费档单库上限 500 MB · <span id="statD1Note">估算值</span></div></div>
+        <div class="stat"><div class="k">✎ 待发草稿</div><div class="v" id="statDraft">—</div><div class="sub">最近保存 <em id="statLastSave">—</em></div></div>
+      </section>
+
+      <section id="editor" class="card hidden">
+        <div class="ed-head"><strong id="edTitle">写新文章</strong><span class="tag amber" id="edTag">草稿 · 未发布</span><span class="ed-hint">Markdown 编辑，右侧实时预览</span></div>
+        <div class="ed-body">
+          <div class="ed-title-row">
+            <input id="fTitle" placeholder="文章标题" aria-label="标题">
+            <select id="fCategory" aria-label="栏目"><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
+          </div>
+          <div class="row3">
+            <div><label>slug（留空自动生成）</label><input id="fSlug" placeholder="post-…"></div>
+            <div><label>状态</label><select id="fPostStatus"><option value="draft">草稿</option><option value="published">已发布</option></select></div>
+            <div><label>作者</label><input id="fAuthor" value="Miku"></div>
+          </div>
+          <label>摘要（留空取正文前 120 字）</label><input id="fExcerpt">
+          <div class="panes">
+            <div class="pane">
+              <div class="pane-head">MARKDOWN <span id="wc">0 字</span></div>
+              <textarea id="fContent" placeholder="支持 # / ##、**粗体**、*斜体*、[链接](https://…)、代码块"></textarea>
+            </div>
+            <div class="pane">
+              <div class="pane-head">实时预览 <span>mikufans.site 效果</span></div>
+              <div id="preview"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ed-foot">
+          <span class="hint">保存后自动刷新列表。</span>
+          <button type="button" class="btn primary" id="saveBtn">保存</button>
+          <button type="button" class="btn ghost-teal" id="publishBtn">发布</button>
+          <button type="button" class="btn" id="unpublishBtn">取消发布</button>
+          <button type="button" class="btn danger" id="deleteBtn">删除</button>
+          <button type="button" class="btn" id="cancelBtn">取消</button>
+        </div>
+      </section>
+
+      <div class="bottom">
+        <section class="card list-card">
+          <div class="card-head"><h2>最近文章</h2><button type="button" class="linklike" id="viewAllLink">查看全部 →</button></div>
+          <div class="filters">
+            <select id="fCat"><option value="">全部栏目</option><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
+            <select id="fStatus"><option value="all">全部状态</option><option value="published">已发布</option><option value="draft">草稿</option></select>
+            <input id="fQ" type="search" placeholder="按标题搜索…">
+            <button type="button" class="btn" id="refreshBtn">刷新</button>
+          </div>
+          <div id="list"></div>
+          <p id="empty" class="muted hidden">还没有文章，先写一篇吧。</p>
+        </section>
+        <div class="side-stack">
+          <section class="card" id="d1Card">
+            <div class="card-head"><h2>数据 · D1</h2></div>
+            <div class="kv">
+              <div class="kv-row"><span class="k">数据库</span><span class="v">mikufans-content</span></div>
+              <div class="kv-row"><span class="k">表</span><span class="v">posts</span></div>
+              <div class="kv-row"><span class="k">文章总数</span><span class="v" id="kvTotal">—</span></div>
+              <div class="kv-row"><span class="k">已发布 / 草稿</span><span class="v" id="kvPubDraft">—</span></div>
+              <div class="kv-row"><span class="k">估算占用</span><span class="v" id="kvBytes">—</span></div>
+              <div class="kv-row"><span class="k">单库上限</span><span class="v">500 MB</span></div>
+            </div>
+            <p class="note" id="d1Note">占用为标题 + 正文 + 摘要的 UTF-8 字节估算，不含索引与行开销。</p>
+          </section>
+        </div>
       </div>
-      <label>摘要（留空取正文前 120 字）</label><input id="fExcerpt">
-      <label>Markdown 正文</label>
-      <textarea id="fContent" rows="14" placeholder="支持 # / ##、**粗体**、*斜体*、[链接](https://…)、代码块"></textarea>
-      <label>实时预览</label>
-      <div id="preview"></div>
-      <div class="row" style="margin-top:14px">
-        <button class="primary" id="saveBtn">保存</button>
-        <button id="publishBtn">发布</button>
-        <button id="unpublishBtn">取消发布</button>
-        <button class="danger" id="deleteBtn">删除</button>
-        <button id="cancelBtn">取消</button>
-      </div>
-    </section>
-  </section>
-  <hr class="line">
-  <p class="muted"><a href="https://mikufans.site">← 回到 MikuFans 主站</a></p>
-</main>
+    </main>
+  </div>
+</div>
+<div id="toast" class="toast" role="status"></div>
 <script>
 (function(){
   var errBox=document.getElementById('err');
@@ -139,6 +357,35 @@
   }
   var editingId=null,allPosts=[];
   var $=function(id){return document.getElementById(id);};
+  var CATEGORY_LABEL={covers:'翻唱',essays:'随笔',moods:'心情',zheteng:'折腾日记'};
+  var NAV_TITLES={all:'仪表盘',covers:'翻唱',essays:'随笔',moods:'心情',zheteng:'折腾日记',drafts:'草稿箱',d1:'数据 D1'};
+  // D1 时间是 UTC 的 YYYY-MM-DD HH:MM:SS，按 UTC 解析、按本地显示
+  function parseSqlTime(s){
+    if(!s)return null;
+    var m=/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/.exec(s);
+    if(!m)return null;
+    return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0)));
+  }
+  function fmtTime(s){
+    var d=parseSqlTime(s);
+    if(!d)return s||'—';
+    function dayStart(x){var t=new Date(x);t.setHours(0,0,0,0);return t;}
+    var today=dayStart(new Date()),yest=new Date(today);yest.setDate(yest.getDate()-1);
+    var ds=dayStart(d);
+    var hh=String(d.getHours()).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');
+    if(ds.getTime()===today.getTime())return '今天 '+hh+':'+mm;
+    if(ds.getTime()===yest.getTime())return '昨天 '+hh+':'+mm;
+    var y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),da=String(d.getDate()).padStart(2,'0');
+    if(y===new Date().getFullYear())return mo+'-'+da+' '+hh+':'+mm;
+    return y+'-'+mo+'-'+da+' '+hh+':'+mm;
+  }
+  function fmtBytes(n){
+    if(n<1024)return n+' B';
+    if(n<1024*1024)return (n/1024).toFixed(1)+' KB';
+    return (n/1048576).toFixed(2)+' MB';
+  }
+  var enc=new TextEncoder();
+  function byteLen(s){return enc.encode(s||'').length;}
   function setAuthUI(authed){
     $('loginBox').classList.toggle('hidden',authed);
     $('app').classList.toggle('hidden',!authed);
@@ -168,26 +415,115 @@
     });
     $('empty').classList.toggle('hidden',rows.length>0);
     $('list').innerHTML=rows.map(function(p){
-      return '<tr><td>'+esc(p.title)+'<br><span class="muted">'+esc(p.slug||'')+'</span></td><td>'+esc(p.category)+'</td><td>'+(p.status==='published'?'已发布':'草稿')+'</td><td class="muted">'+esc(p.updated_at||p.created_at||'')+'</td><td><button data-edit="'+p.id+'">编辑</button></td></tr>';
+      return '<div class="post-row"><div class="post-main"><b>'+esc(p.title)+'</b><span class="post-meta">'+esc(p.slug||'')+' · '+esc(fmtTime(p.updated_at||p.created_at)||'')+'</span></div>'
+        +'<span class="pill cat">'+esc(CATEGORY_LABEL[p.category]||p.category)+'</span>'
+        +'<span class="pill '+(p.status==='published'?'published':'draft')+'">'+(p.status==='published'?'已发布':'草稿')+'</span>'
+        +'<button type="button" class="btn" data-edit="'+p.id+'">编辑</button></div>';
     }).join('');
     Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'),function(b){
       b.onclick=function(){openEditor(+b.getAttribute('data-edit'));};
     });
+    setActiveNav();
   }
   async function loadList(){
     clearErr();
     try{
       var d=await api('/api/posts?status=all&limit=100');
-      allPosts=d.posts||[];renderList();
+      allPosts=d.posts||[];renderList();updateStats();
     }catch(e){showErr('加载列表失败：'+e.message);}
   }
   $('refreshBtn').onclick=loadList;
   $('fCat').onchange=renderList;$('fStatus').onchange=renderList;$('fQ').oninput=renderList;
+  // 统计全部按已加载的文章列表在前端算，不编造任何访问量数据
+  function updateStats(){
+    var total=allPosts.length,pub=0,drafts=0,monthNew=0,weekPub=0,bytes=0;
+    var now=new Date(),y=now.getUTCFullYear(),mo=now.getUTCMonth();
+    var weekAgo=Date.now()-7*24*3600*1000;
+    var lastStr=null,lastMs=0;
+    var counts={covers:0,essays:0,moods:0,zheteng:0};
+    allPosts.forEach(function(p){
+      if(p.status==='published'){pub++;}else{drafts++;}
+      if(counts[p.category]!==undefined)counts[p.category]++;
+      var c=parseSqlTime(p.created_at);
+      if(c&&c.getUTCFullYear()===y&&c.getUTCMonth()===mo)monthNew++;
+      var pb=parseSqlTime(p.published_at)||parseSqlTime(p.updated_at);
+      if(p.status==='published'&&pb&&pb.getTime()>=weekAgo)weekPub++;
+      bytes+=byteLen(p.title)+byteLen(p.content)+byteLen(p.excerpt);
+      var u=parseSqlTime(p.updated_at)||parseSqlTime(p.created_at);
+      if(u&&u.getTime()>lastMs){lastMs=u.getTime();lastStr=p.updated_at||p.created_at;}
+    });
+    $('statTotal').textContent=total;
+    $('statMonthNew').textContent='+'+monthNew+' 篇';
+    $('statPub').textContent=pub;
+    $('statWeekPub').textContent='+'+weekPub+' 篇';
+    $('statD1').innerHTML=fmtBytes(bytes)+' <small>/ 500 MB</small>';
+    $('statD1Bar').style.width=Math.min(100,bytes/524288000*100)+'%';
+    $('statDraft').textContent=drafts;
+    $('statLastSave').textContent=lastStr?fmtTime(lastStr):'—';
+    $('cnt-covers').textContent=counts.covers;
+    $('cnt-essays').textContent=counts.essays;
+    $('cnt-moods').textContent=counts.moods;
+    $('cnt-zheteng').textContent=counts.zheteng;
+    $('cnt-drafts').textContent=drafts;
+    $('kvTotal').textContent=total;
+    $('kvPubDraft').textContent=pub+' / '+drafts;
+    $('kvBytes').textContent=fmtBytes(bytes);
+    $('d1Note').textContent=total>=100
+      ?'占用为标题 + 正文 + 摘要的 UTF-8 字节估算，不含索引与行开销。接口单次最多返回 100 篇，统计按已加载的篇数计算。'
+      :'占用为标题 + 正文 + 摘要的 UTF-8 字节估算，不含索引与行开销。';
+  }
+  function currentView(){
+    var cat=$('fCat').value,st=$('fStatus').value;
+    if(st==='draft'&&!cat)return 'drafts';
+    if(cat&&CATEGORY_LABEL[cat])return cat;
+    return 'all';
+  }
+  function setActiveNav(){
+    var v=currentView();
+    document.querySelectorAll('.nav-item').forEach(function(b){
+      b.classList.toggle('active',b.getAttribute('data-nav')===v);
+    });
+    $('crumbTitle').textContent=NAV_TITLES[v]||'仪表盘';
+  }
+  document.querySelectorAll('.nav-item').forEach(function(b){
+    b.onclick=function(){
+      var v=b.getAttribute('data-nav');
+      if(v==='d1'){
+        var el=$('d1Card');
+        el.scrollIntoView({behavior:'smooth',block:'start'});
+        el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+        $('crumbTitle').textContent='数据 D1';
+        return;
+      }
+      if(v==='drafts'){$('fCat').value='';$('fStatus').value='draft';}
+      else if(v==='all'){$('fCat').value='';$('fStatus').value='all';}
+      else{$('fCat').value=v;$('fStatus').value='all';}
+      $('fQ').value='';
+      renderList();
+      document.querySelector('.list-card').scrollIntoView({behavior:'smooth',block:'start'});
+    };
+  });
+  $('viewAllLink').onclick=function(){$('fCat').value='';$('fStatus').value='all';$('fQ').value='';renderList();};
+  var toastTimer=null;
+  function showToast(m){
+    var t=$('toast');t.textContent=m;t.classList.add('show');
+    if(toastTimer)clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){t.classList.remove('show');},2600);
+  }
+  // 导出备份：Worker 暂无导出接口，先做诚实占位，不假装已实现
+  $('exportBtn').onclick=function(){showToast('导出功能还没接 D1 导出接口，稍后再来。');};
+  function updateWc(){
+    var v=$('fContent').value||'';
+    $('wc').textContent=v.length+' 字';
+  }
   function openEditor(id){
     clearErr();
     var p=id?allPosts.find(function(x){return x.id===id;}):null;
     editingId=id||null;
     $('edTitle').textContent=p?'编辑文章':'写新文章';
+    var tag=$('edTag');
+    if(p&&p.status==='published'){tag.textContent='已发布';tag.className='tag teal';}
+    else{tag.textContent='草稿 · 未发布';tag.className='tag amber';}
     $('fTitle').value=p?p.title:'';
     $('fSlug').value=p?p.slug:'';
     $('fCategory').value=p?p.category:'covers';
@@ -196,13 +532,14 @@
     $('fExcerpt').value=p?p.excerpt||'':'';
     $('fContent').value=p?p.content:'';
     $('preview').innerHTML=md($('fContent').value);
+    updateWc();
     $('editor').classList.remove('hidden');
     $('deleteBtn').style.display=p?'':'none';
     $('editor').scrollIntoView();
   }
   $('newBtn').onclick=function(){openEditor(null);};
   $('cancelBtn').onclick=function(){$('editor').classList.add('hidden');editingId=null;};
-  $('fContent').oninput=function(){$('preview').innerHTML=md($('fContent').value);};
+  $('fContent').oninput=function(){$('preview').innerHTML=md($('fContent').value);updateWc();};
   function formBody(statusOverride){
     return {
       title:$('fTitle').value.trim(),

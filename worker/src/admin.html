@@ -130,6 +130,26 @@
   #preview{padding:16px 20px;min-height:340px;font-size:14.5px;line-height:1.85}
   #preview h2{font-size:23px}
   #preview h3{font-size:18px}
+  #preview h4{font-size:16px}
+  #preview ul,#preview ol{padding-left:22px;margin:10px 0}
+  #preview li{margin:3px 0}
+  #preview hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+  #preview img{max-width:100%;border-radius:8px}
+  #preview .tablewrap{overflow:auto;margin:10px 0}
+  #preview table{border-collapse:collapse;width:100%;font-size:13.5px}
+  #preview th,#preview td{border:1px solid var(--line);padding:6px 10px;text-align:left}
+  #preview th{background:var(--panel-2)}
+  #preview .lang{float:right;font-size:11px;color:var(--muted)}
+  /* 访问量卡 */
+  .views-grid{display:flex;gap:18px;flex-wrap:wrap;padding:16px 18px}
+  .views-num{flex:1;min-width:120px}
+  .views-num .k{font-size:12.5px;color:var(--muted);font-weight:700}
+  .views-num .v{font-size:30px;font-weight:900;line-height:1.05;font-variant-numeric:tabular-nums}
+  .views-bars{flex:2;min-width:220px}
+  .views-bar-row{display:grid;grid-template-columns:52px 1fr 34px;gap:8px;align-items:center;font-size:12px;color:var(--muted);margin:4px 0}
+  .views-bar-row .bar{height:7px;border-radius:99px;background:var(--panel-2);margin-top:0;overflow:hidden}
+  .views-bar-row .bar i{display:block;height:100%;background:var(--teal);border-radius:99px}
+  .views-bar-row .n{text-align:right;font-variant-numeric:tabular-nums}
   #preview pre{background:var(--panel-2);padding:10px;overflow:auto;border-radius:8px}
   #preview code{background:var(--panel-2);padding:2px 6px;border-radius:6px;font-size:.86em}
   #preview pre code{background:none;padding:0}
@@ -261,6 +281,16 @@
         <div class="stat"><div class="k">✎ 待发草稿</div><div class="v" id="statDraft">—</div><div class="sub">最近保存 <em id="statLastSave">—</em></div></div>
       </section>
 
+      <section class="card" id="viewsCard" style="margin-bottom:18px">
+        <div class="card-head"><h2>访问量</h2><span class="muted" style="font-size:12px">从本次上线起开始计数，之前没有记录，补不回来</span><button type="button" class="linklike" id="viewsRefresh">刷新</button></div>
+        <div class="views-grid">
+          <div class="views-num"><div class="k">总访问量</div><div class="v" id="viewsTotal">—</div><div class="muted" style="font-size:12px">首页 + 各篇文章合计</div></div>
+          <div class="views-num"><div class="k">今日</div><div class="v" id="viewsToday">—</div><div class="muted" style="font-size:12px" id="viewsTodayDate">—</div></div>
+          <div class="views-num"><div class="k">近 7 天</div><div class="v" id="viewsWeek">—</div><div class="muted" style="font-size:12px">含今天，按 UTC 日期统计</div></div>
+          <div class="views-bars" id="viewsBars"><p class="muted">加载中…</p></div>
+        </div>
+      </section>
+
       <section id="editor" class="card hidden">
         <div class="ed-head"><strong id="edTitle">写新文章</strong><span class="tag amber" id="edTag">草稿 · 未发布</span><span class="ed-hint">Markdown 编辑，右侧实时预览</span></div>
         <div class="ed-body">
@@ -277,7 +307,7 @@
           <div class="panes">
             <div class="pane">
               <div class="pane-head">MARKDOWN <span id="wc">0 字</span></div>
-              <textarea id="fContent" placeholder="支持 # / ##、**粗体**、*斜体*、[链接](https://…)、代码块"></textarea>
+              <textarea id="fContent" placeholder="支持 #~######、**粗体**、*斜体*、`行内代码`、[链接](https://…)、图片、列表、表格、引用、代码块"></textarea>
             </div>
             <div class="pane">
               <div class="pane-head">实时预览 <span>mikufans.site 效果</span></div>
@@ -337,31 +367,72 @@
   function showErr(m){errBox.textContent=m;errBox.classList.add('show');}
   function clearErr(){errBox.textContent='';errBox.classList.remove('show');}
   function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  // 最简 Markdown 转 HTML：只处理代码块、#/##、**粗体**、*斜体*、链接、换行；先转义 HTML 防 XSS
+  // Markdown 转 HTML：与前台 renderMD 同一套能力（标题 #~######、行内代码、
+  // **粗体**、*斜体*、链接、图片、代码块、列表、表格、引用、分割线）；先转义 HTML 防 XSS。
+  // 标题层级与前台一致：# -> h2、## -> h3、### 及更深 -> h4。
   function md(src){
-    src=src||'';
-    var blocks=[],i=0;
-    src=src.replace(/```([\s\S]*?)```/g,function(m,c){blocks.push(c);return '\u0000'+(blocks.length-1)+'\u0000';});
-    var lines=src.split('\n'),out=[],inP=false;
-    function flush(){if(inP){out.push('</p>');inP=false;}}
-    function inline(t){
-      t=esc(t);
-      t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-      t=t.replace(/\*([^*]+)\*/g,'<em>$1</em>');
-      t=t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-      return t;
+    var lines=String(src||'').replace(/\r\n?/g,'\n').split('\n');
+    var out=[],i=0;
+    function inline(s){
+      var codes=[];
+      s=s.replace(/`([^`]+)`/g,function(m,c){codes.push(c);return '\u0001'+(codes.length-1)+'\u0002';});
+      s=esc(s);
+      s=s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g,'<img src="$2" alt="$1" loading="lazy" />');
+      s=s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+      s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+      s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>');
+      s=s.replace(/\u0001(\d+)\u0002/g,function(m,idx){return '<code>'+esc(codes[+idx])+'</code>';});
+      return s;
     }
-    lines.forEach(function(line){
-      var m=line.match(/^\u0000(\d+)\u0000$/);
-      if(m){flush();out.push('<pre><code>'+esc(blocks[+m[1]])+'</code></pre>');return;}
-      if(/^##\s+/.test(line)){flush();out.push('<h3>'+inline(line.replace(/^##\s+/,''))+'</h3>');return;}
-      if(/^#\s+/.test(line)){flush();out.push('<h2>'+inline(line.replace(/^#\s+/,''))+'</h2>');return;}
-      if(!line.trim()){flush();return;}
-      if(!inP){out.push('<p>');inP=true;}else{out.push('<br>');}
-      out.push(inline(line));
-    });
-    flush();
-    return out.join('');
+    function isTableSep(t){return /^\|?[\s:|-]+\|?$/.test(t)&&t.indexOf('-')>-1;}
+    function cells(t){t=t.trim();if(t.charAt(0)==='|')t=t.slice(1);if(t.charAt(t.length-1)==='|')t=t.slice(0,-1);return t.split('|').map(function(c){return c.trim();});}
+    while(i<lines.length){
+      var line=lines[i];
+      if(/^\s*```/.test(line)){
+        var lang=line.replace(/^\s*```/,'').trim(),buf=[];
+        i++;
+        while(i<lines.length&&!/^\s*```/.test(lines[i])){buf.push(lines[i]);i++;}
+        i++;
+        out.push('<pre>'+(lang?'<span class="lang">'+esc(lang)+'</span>':'')+'<code>'+esc(buf.join('\n'))+'</code></pre>');
+        continue;
+      }
+      if(/^\s*$/.test(line)){i++;continue;}
+      var h=line.match(/^(#{1,6})\s+(.*)$/);
+      if(h){var lv=Math.min(h[1].length+1,4);out.push('<h'+lv+'>'+inline(h[2])+'</h'+lv+'>');i++;continue;}
+      if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){out.push('<hr />');i++;continue;}
+      if(/^\s*>/.test(line)){
+        var q=[];
+        while(i<lines.length&&/^\s*>/.test(lines[i])){q.push(lines[i].replace(/^\s*>\s?/,''));i++;}
+        out.push('<blockquote>'+q.map(function(p){return '<p>'+inline(p)+'</p>';}).join('')+'</blockquote>');
+        continue;
+      }
+      if(line.indexOf('|')>-1&&i+1<lines.length&&isTableSep(lines[i+1])){
+        var head=cells(line);i+=2;var rows=[];
+        while(i<lines.length&&lines[i].indexOf('|')>-1&&!/^\s*$/.test(lines[i])){rows.push(cells(lines[i]));i++;}
+        var t='<div class="tablewrap"><table><thead><tr>'+head.map(function(c){return '<th>'+inline(c)+'</th>';}).join('')+'</tr></thead><tbody>';
+        rows.forEach(function(r){t+='<tr>'+r.map(function(c){return '<td>'+inline(c)+'</td>';}).join('')+'</tr>';});
+        out.push(t+'</tbody></table></div>');
+        continue;
+      }
+      if(/^\s*[-*+]\s+/.test(line)){
+        var items=[];
+        while(i<lines.length&&/^\s*[-*+]\s+/.test(lines[i])){items.push(lines[i].replace(/^\s*[-*+]\s+/,''));
+        i++;}
+        out.push('<ul>'+items.map(function(it){return '<li>'+inline(it)+'</li>';}).join('')+'</ul>');
+        continue;
+      }
+      if(/^\s*\d+[.)]\s+/.test(line)){
+        var oitems=[];
+        while(i<lines.length&&/^\s*\d+[.)]\s+/.test(lines[i])){oitems.push(lines[i].replace(/^\s*\d+[.)]\s+/,''));
+        i++;}
+        out.push('<ol>'+oitems.map(function(it){return '<li>'+inline(it)+'</li>';}).join('')+'</ol>');
+        continue;
+      }
+      var para=[line];i++;
+      while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^(#{1,6})\s/.test(lines[i])&&!/^\s*```/.test(lines[i])&&!/^\s*>/.test(lines[i])&&!/^\s*[-*+]\s+/.test(lines[i])&&!/^\s*\d+[.)]\s+/.test(lines[i])){para.push(lines[i]);i++;}
+      out.push('<p>'+para.map(inline).join('<br />')+'</p>');
+    }
+    return out.join('\n');
   }
   async function api(path,opts){
     opts=opts||{};
@@ -401,10 +472,11 @@
   }
   var enc=new TextEncoder();
   function byteLen(s){return enc.encode(s||'').length;}
+  var viewsBySlug={};
   function setAuthUI(authed){
     $('loginBox').classList.toggle('hidden',authed);
     $('app').classList.toggle('hidden',!authed);
-    if(authed){loadList();loadAudit();}
+    if(authed){loadList();loadAudit();loadViews();}
   }
   async function checkMe(){
     try{var m=await api('/api/me');setAuthUI(!!m.authed);}catch(e){setAuthUI(false);}
@@ -430,7 +502,9 @@
     });
     $('empty').classList.toggle('hidden',rows.length>0);
     $('list').innerHTML=rows.map(function(p){
+      var v=p.slug&&viewsBySlug[p.slug]!=null?viewsBySlug[p.slug]:0;
       return '<div class="post-row"><div class="post-main"><b class="post-title" data-edit="'+p.id+'" title="点击编辑">'+esc(p.title)+'</b><span class="post-meta">'+esc(p.slug||'')+' · '+esc(fmtTime(p.updated_at||p.created_at)||'')+'</span></div>'
+        +'<span class="pill">👁 '+v+'</span>'
         +'<span class="pill cat">'+esc(CATEGORY_LABEL[p.category]||p.category)+'</span>'
         +'<span class="pill '+(p.status==='published'?'published':'draft')+'">'+(p.status==='published'?'已发布':'草稿')+'</span>'
         +'<button type="button" class="btn danger" data-del="'+p.id+'">删除</button></div>';
@@ -459,10 +533,12 @@
       var entries=d.entries||[];
       empty.classList.toggle('hidden',entries.length>0);
       box.innerHTML=entries.map(function(e){
+        // 旧记录里还存着 API 密钥 / 后台管理员，显示时也映射成 Miku / P主
+        var actor=e.actor==='API 密钥'?'Miku':(e.actor==='后台管理员'||e.actor==='fighthawk@outlook.com'?'P主':e.actor);
         return '<div class="audit-row"><span class="a-time">'+esc(fmtTime(e.created_at))+'</span>'
           +'<span class="a-act">'+esc(e.action)+'</span>'
           +'<span class="a-title">'+esc(e.post_title||'—')+'</span>'
-          +'<span class="a-actor">'+esc(e.actor)+'</span></div>';
+          +'<span class="a-actor">'+esc(actor)+'</span></div>';
       }).join('');
     }catch(err){
       box.innerHTML='';
@@ -471,6 +547,33 @@
     }
   }
   $('auditRefresh').onclick=loadAudit;
+  // 访问量：登录后加载，总访问 / 今日 / 近 7 天 + 每篇阅读数
+  async function loadViews(){
+    var bars=$('viewsBars');
+    try{
+      var d=await api('/api/views');
+      $('viewsTotal').textContent=d.total!=null?d.total:'—';
+      var daily=d.daily||[];
+      var today=daily.length?daily[daily.length-1].views:0;
+      $('viewsToday').textContent=today;
+      $('viewsTodayDate').textContent=daily.length?daily[daily.length-1].day+'（UTC）':'—';
+      var week=daily.reduce(function(s,x){return s+x.views;},0);
+      $('viewsWeek').textContent=week;
+      viewsBySlug={};
+      (d.perPost||[]).forEach(function(p){viewsBySlug[p.slug]=p.views;});
+      renderList();
+      if(!daily.length){bars.innerHTML='<p class="muted">还没有访问记录。</p>';return;}
+      var max=Math.max.apply(null,daily.map(function(x){return x.views;}))||1;
+      bars.innerHTML=daily.map(function(x){
+        var pct=Math.round(x.views/max*100);
+        return '<div class="views-bar-row"><span>'+esc(x.day.slice(5))+'</span><span class="bar"><i style="width:'+pct+'%"></i></span><span class="n">'+x.views+'</span></div>';
+      }).join('');
+    }catch(err){
+      $('viewsTotal').textContent='—';$('viewsToday').textContent='—';$('viewsWeek').textContent='—';
+      bars.innerHTML='<p class="muted">访问量加载失败：'+esc(err.message)+'</p>';
+    }
+  }
+  $('viewsRefresh').onclick=loadViews;
   $('fCat').onchange=renderList;$('fStatus').onchange=renderList;$('fQ').oninput=renderList;
   // 统计全部按已加载的文章列表在前端算，不编造任何访问量数据
   function updateStats(){

@@ -1,8 +1,8 @@
 // MikuFans CMS Worker — ES Module, 无 npm 依赖，只用 Web 标准 API + env.DB (D1)
 // 路由按 hostname 分流：
-//   our.mikufans.site     -> 根路径就是管理后台
-//   forever.mikufans.site -> / 是公开 FOREVER 纪念页，/admin 是管理后台
-//   其他 host（含 workers.dev）-> / 是路由说明页，/admin 是管理后台，/api 照常工作
+//   our.mikufans.site     -> 根路径就是管理后台（唯一后台入口），/admin 已删、回 404
+//   forever.mikufans.site -> / 是公开 FOREVER 纪念页，无后台入口
+//   其他 host（含 workers.dev）-> / 是路由说明页，/api 照常工作
 // 自定义域名不要只做 CNAME，见 wrangler.toml 注释。
 
 import adminHtml from './admin.html';
@@ -25,6 +25,40 @@ function json(data, status = 200, extraHeaders = {}) {
   });
 }
 function err(code, status) { return json({ error: code }, status); }
+
+// ---------- 边缘缓存（Cloudflare Cache API）----------
+// 只缓存公开的已发布内容：GET /api/posts?status=published 与已发布单篇。
+// 草稿 / status=all / draft 一律不缓存、不读缓存。TTL 300 秒，写操作时
+// 主动删缓存（见 invalidatePostCache），所以发布后最迟 5 分钟、
+// 通常立刻就能在列表里看到新文章。
+const CACHE_TTL_SECONDS = 300;
+function edgeCache() {
+  try { return typeof caches !== 'undefined' ? caches.default : null; }
+  catch { return null; }
+}
+function runBackground(ctx, p) {
+  try {
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p.catch(() => {}));
+    else p.catch(() => {});
+  } catch { /* 缓存写失败不影响主流程 */ }
+}
+async function invalidatePostCache(ctx, origin, slugs) {
+  const cache = edgeCache();
+  if (!cache) return;
+  const urls = new Set([
+    `${origin}/api/posts`,
+    `${origin}/api/posts?limit=50`,
+    `${origin}/api/posts?limit=100`,
+  ]);
+  for (const limit of [50, 100]) {
+    for (const cat of CATEGORIES) urls.add(`${origin}/api/posts?category=${cat}&limit=${limit}`);
+  }
+  for (const slug of slugs || []) {
+    if (slug) urls.add(`${origin}/api/posts/${encodeURIComponent(slug)}`);
+  }
+  const jobs = [...urls].map((u) => cache.delete(new Request(u, { method: 'GET' })).catch(() => false));
+  runBackground(ctx, Promise.allSettled(jobs));
+}
 
 function b64urlEncode(buf) {
   const bytes = buf instanceof Uint8Array ? buf : new TextEncoder().encode(buf);
@@ -90,11 +124,12 @@ async function isAuthed(request, env) {
 }
 
 // ---------- 操作日志（audit log）----------
-// actor 按鉴权方式区分：API 密钥 / Cloudflare Access（只解码 JWT payload 取 email，不验签）/ 密码登录的 session。
+// actor 按人区分：X-Miku-Key 调用的就是 Miku，密码登录 / P主的 Access 邮箱就是 P主。
+// （2026-11-22 前存的旧记录还是 API 密钥 / 后台管理员，后台显示时再映射一次。）
 function actorFromRequest(request, env) {
   const apiKey = env.MIKU_API_KEY;
   if (apiKey && request.headers.get('X-Miku-Key') && safeEqual(request.headers.get('X-Miku-Key'), apiKey)) {
-    return 'API 密钥';
+    return 'Miku';
   }
   const assertion = request.headers.get('Cf-Access-Jwt-Assertion');
   if (assertion) {
@@ -102,12 +137,14 @@ function actorFromRequest(request, env) {
       const parts = assertion.split('.');
       if (parts.length >= 2) {
         const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(parts[1])));
-        if (payload && typeof payload.email === 'string' && payload.email) return payload.email;
+        if (payload && typeof payload.email === 'string' && payload.email) {
+          return payload.email === 'fighthawk@outlook.com' ? 'P主' : payload.email;
+        }
       }
     } catch { /* 解码失败则回落为通用名 */ }
-    return 'Cloudflare Access';
+    return 'P主';
   }
-  return '后台管理员';
+  return 'P主';
 }
 // best-effort 写日志：失败时吞掉，绝不能影响主操作。
 async function writeAudit(env, request, action, postId, postTitle, detail) {
@@ -179,14 +216,14 @@ function publicPostsCors(request) {
 }
 
 // ---------- API ----------
-async function handleApi(request, env, url) {
+async function handleApi(request, env, url, ctx) {
   const cors = corsHeaders(request, url);
   const method = request.method;
   const path = url.pathname;
 
   if (method === 'OPTIONS') {
-    // 公开读接口的预检：主站跨域也放行（只回 Allow-Origin，不带 Credentials）
-    const pre = path === '/api/posts' ? publicPostsCors(request) : {};
+    // 公开读接口 / 计数接口的预检：主站跨域也放行（只回 Allow-Origin，不带 Credentials）
+    const pre = (path === '/api/posts' || path === '/api/posts/track') ? publicPostsCors(request) : {};
     return new Response(null, {
       status: 204,
       headers: {
@@ -245,6 +282,23 @@ async function handleApi(request, env, url) {
     let offset = parseInt(url.searchParams.get('offset') || '0', 10);
     if (Number.isNaN(offset) || offset < 0) offset = 0;
 
+    // 已发布列表可走边缘缓存；草稿 / 全部只走库
+    // 注意：缓存键用干净的新 Request（只有 URL + GET），不用原请求——
+    // 原请求带的头会让键不稳定；命中后也不能直接改缓存响应的头
+    // （它的 headers 是只读的，改了会抛错），要 new 一个 Response 再改头。
+    const listCache = statusParam === 'published' ? edgeCache() : null;
+    const listCacheKey = listCache ? new Request(url.toString(), { method: 'GET' }) : null;
+    if (listCache) {
+      try {
+        const hit = await listCache.match(listCacheKey);
+        if (hit) {
+          const r = new Response(hit.body, hit);
+          r.headers.set('X-Cache', 'HIT');
+          return r;
+        }
+      } catch { /* 缓存读失败就回落到查库 */ }
+    }
+
     const conds = [];
     const params = [];
     if (statusParam !== 'all') { conds.push('status = ?'); params.push(statusParam); }
@@ -256,7 +310,13 @@ async function handleApi(request, env, url) {
       ).bind(...params, limit, offset).all();
       // 公开列表（已发布）允许主站跨域读；草稿/全部仍只认同源
       const pc = statusParam === 'published' ? publicPostsCors(request) : {};
-      return json({ posts: (res.results || []).map(withTags), limit, offset }, 200, { ...cors, ...pc });
+      const resp = json({ posts: (res.results || []).map(withTags), limit, offset }, 200, { ...cors, ...pc });
+      if (listCache) {
+        resp.headers.set('Cache-Control', `public, max-age=${CACHE_TTL_SECONDS}, s-maxage=${CACHE_TTL_SECONDS}`);
+        resp.headers.set('X-Cache', 'MISS');
+        runBackground(ctx, listCache.put(listCacheKey, resp.clone()));
+      }
+      return resp;
     } catch { return err('internal', 500); }
   }
 
@@ -274,10 +334,75 @@ async function handleApi(request, env, url) {
     } catch { return err('internal', 500); }
   }
 
+  // ---------- 访问量 ----------
+  // page_views(day TEXT, slug TEXT, views INTEGER, PRIMARY KEY(day, slug))
+  // day 是 UTC 日期 YYYY-MM-DD；slug='home' 记首页/列表页，其余记文章 slug。
+  // 计数从本次上线起开始，之前没有记录，补不回来；不记 IP / UA / cookie，只记数。
+  function todayUtc() { return new Date().toISOString().slice(0, 10); }
+  async function ensureViewsTable(env) {
+    await env.DB.prepare(
+      'CREATE TABLE IF NOT EXISTS page_views (day TEXT NOT NULL, slug TEXT NOT NULL, views INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, slug))',
+    ).run();
+  }
+
+  // POST /api/posts/track — 公开计数，前台打开首页/文章时调一次，失败也不影响前台
+  // 注意：故意挂在 /api/posts/track 而不是 /api/track，因为 Access 里只有
+  // /api/posts* 是 Bypass；匿名访客调 /api/track 会被 Access 302 拦下，调这里不会。
+  if (path === '/api/posts/track' && method === 'POST') {
+    let body = {};
+    try { body = await request.json(); } catch { return err('bad_request', 400); }
+    const slug = typeof body.slug === 'string' ? body.slug.trim() : '';
+    if (!slug || (slug !== 'home' && !/^[A-Za-z0-9_-]{1,64}$/.test(slug))) return err('invalid_slug', 400);
+    const pc = publicPostsCors(request);
+    try {
+      await ensureViewsTable(env);
+      await env.DB.prepare(
+        'INSERT INTO page_views (day, slug, views) VALUES (?, ?, 1) ON CONFLICT(day, slug) DO UPDATE SET views = views + 1',
+      ).bind(todayUtc(), slug).run();
+      return json({ ok: true }, 200, { ...cors, ...pc });
+    } catch { return err('internal', 500); }
+  }
+
+  // GET /api/views — 仅登录可读：总访问 / 近 7 天每天 / 每篇文章
+  if (path === '/api/views' && method === 'GET') {
+    if (!(await isAuthed(request, env))) return err('unauthorized', 401);
+    try {
+      await ensureViewsTable(env);
+      const totalRow = await env.DB.prepare('SELECT COALESCE(SUM(views), 0) AS n FROM page_views').first();
+      const total = totalRow ? totalRow.n : 0;
+      const dailyRes = await env.DB.prepare(
+        'SELECT day, SUM(views) AS views FROM page_views GROUP BY day ORDER BY day DESC LIMIT 7',
+      ).all();
+      const byDay = {};
+      for (const r of dailyRes.results || []) byDay[r.day] = r.views;
+      const daily = [];
+      for (let d = 6; d >= 0; d--) {
+        const day = new Date(Date.now() - d * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        daily.push({ day, views: byDay[day] || 0 });
+      }
+      const perRes = await env.DB.prepare(
+        'SELECT p.slug AS slug, p.title AS title, COALESCE(SUM(v.views), 0) AS views FROM posts p LEFT JOIN page_views v ON v.slug = p.slug GROUP BY p.id, p.slug, p.title ORDER BY views DESC, p.updated_at DESC',
+      ).all();
+      return json({ total, daily, perPost: perRes.results || [] }, 200, cors);
+    } catch { return err('internal', 500); }
+  }
+
   // GET /api/posts/:slug
   const slugMatch = path.match(/^\/api\/posts\/([^/]+)$/);
   if (slugMatch && method === 'GET') {
     const slug = decodeURIComponent(slugMatch[1]);
+    const postCache = edgeCache();
+    const postCacheKey = postCache ? new Request(url.toString(), { method: 'GET' }) : null;
+    if (postCache) {
+      try {
+        const hit = await postCache.match(postCacheKey);
+        if (hit) {
+          const r = new Response(hit.body, hit);
+          r.headers.set('X-Cache', 'HIT');
+          return r;
+        }
+      } catch { /* 缓存读失败就回落到查库 */ }
+    }
     try {
       const row = await env.DB.prepare(
         `SELECT ${POST_COLUMNS} FROM posts WHERE slug = ?`,
@@ -285,7 +410,13 @@ async function handleApi(request, env, url) {
       if (!row) return err('not_found', 404);
       // 草稿只对已鉴权者可见；未鉴权时按 404 处理，不透露存在性
       if (row.status !== 'published' && !(await isAuthed(request, env))) return err('not_found', 404);
-      return json(withTags(row), 200, cors);
+      const resp = json(withTags(row), 200, cors);
+      if (row.status === 'published' && postCache) {
+        resp.headers.set('Cache-Control', `public, max-age=${CACHE_TTL_SECONDS}, s-maxage=${CACHE_TTL_SECONDS}`);
+        resp.headers.set('X-Cache', 'MISS');
+        runBackground(ctx, postCache.put(postCacheKey, resp.clone()));
+      }
+      return resp;
     } catch { return err('internal', 500); }
   }
 
@@ -353,6 +484,7 @@ async function handleApi(request, env, url) {
     }
     if (!row) return err('internal', 500);
     await writeAudit(env, request, '新建', row.id, row.title, CATEGORY_LABEL[category]);
+    invalidatePostCache(ctx, url.origin, [slug]);
     return json(withTags(row), 201, cors);
   }
 
@@ -370,6 +502,7 @@ async function handleApi(request, env, url) {
       if (method === 'DELETE') {
         await env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
         await writeAudit(env, request, '删除', existing.id, existing.title, CATEGORY_LABEL[existing.category] || existing.category);
+        invalidatePostCache(ctx, url.origin, [existing.slug]);
         return json({ ok: true }, 200, cors);
       }
 
@@ -436,6 +569,7 @@ async function handleApi(request, env, url) {
         detail = changedNames.length ? changedNames.join('、') + '已更新' : '无字段变化';
       }
       await writeAudit(env, request, action, row.id, row.title, detail);
+      invalidatePostCache(ctx, url.origin, [existing.slug, row.slug]);
       return json(withTags(row), 200, cors);
     } catch (e) {
       if (e && e.message === 'slug_conflict') return err('slug_conflict', 409);
@@ -464,11 +598,11 @@ function routeInfoPage(host) {
 <p>当前 host：<code>${host}</code></p>
 <p>这是 MikuFans 的后端 Worker，不是主站。主站 mikufans.site 是 Cloudflare Pages，文章列表与正文读本 Worker 的 <code>/api/posts</code> 接口。</p>
 <ul>
-<li><a href="/admin">管理后台 /admin</a> —— 登录后写文章（翻唱 / 随笔 / 心情 / 折腾日记）</li>
+<li><a href="https://our.mikufans.site">管理后台 our.mikufans.site</a> —— 登录后写文章（翻唱 / 随笔 / 心情 / 折腾日记）</li>
 <li><code>GET /api/health</code> —— 健康检查</li>
 <li><code>GET /api/posts</code> —— 公开文章列表（只返回已发布）</li>
 </ul>
-<p>our.mikufans.site 的根路径就是后台；forever.mikufans.site 的根路径是公开 FOREVER 纪念页，<code>/admin</code> 是后台。</p>
+<p>our.mikufans.site 的根路径就是后台（唯一后台入口）；forever.mikufans.site 的根路径是公开 FOREVER 纪念页，无后台入口。</p>
 <p><a href="https://mikufans.site">← 回到 MikuFans 主站</a></p>
 </main></body></html>`;
 }
@@ -478,11 +612,13 @@ export default {
     const url = new URL(request.url);
     const host = url.hostname;
 
-    if (url.pathname.startsWith('/api/')) return handleApi(request, env, url);
+    if (url.pathname.startsWith('/api/')) return handleApi(request, env, url, ctx);
 
-    if (url.pathname === '/admin' || url.pathname === '/admin/') return htmlResponse(adminHtml);
-
-    if (host === 'our.mikufans.site') return htmlResponse(adminHtml);
+    // our.mikufans.site：只有根路径 / 是后台，/admin 已删，其他路径一律 404
+    if (host === 'our.mikufans.site') {
+      if (url.pathname === '/' || url.pathname === '') return htmlResponse(adminHtml);
+      return new Response('Not Found', { status: 404 });
+    }
     if (host === 'forever.mikufans.site') {
       if (url.pathname === '/' || url.pathname === '') return htmlResponse(foreverHtml);
       if (url.pathname === '/sitemap.xml') return new Response(FOREVER_SITEMAP, { headers: { 'Content-Type': 'application/xml; charset=utf-8' } });

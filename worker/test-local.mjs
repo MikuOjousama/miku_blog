@@ -14,11 +14,13 @@ const srcDir = join(dir, 'src');
 function makeMockDB() {
   const posts = [];
   const audit = [];
+  const views = []; // {day, slug, views}
   let nextId = 1;
   let nextAuditId = 1;
   return {
     _posts: posts,
     _audit: audit,
+    _views: views,
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -62,9 +64,31 @@ function makeMockDB() {
             audit.push(row);
             return { success: true, meta: { last_row_id: row.id } };
           }
+          if (/INSERT INTO page_views/i.test(sql)) {
+            const [day, slug] = this._params;
+            const row = views.find((v) => v.day === day && v.slug === slug);
+            if (row) row.views += 1;
+            else views.push({ day, slug, views: 1 });
+            return { success: true, meta: {} };
+          }
           return { success: true, meta: {} };
         },
         async all() {
+          if (/FROM page_views/i.test(sql) && /GROUP BY day/i.test(sql)) {
+            const byDay = {};
+            for (const v of views) byDay[v.day] = (byDay[v.day] || 0) + v.views;
+            const out = Object.entries(byDay).map(([day, n]) => ({ day, views: n }));
+            out.sort((a, b) => (b.day < a.day ? -1 : b.day > a.day ? 1 : 0));
+            return { results: out.slice(0, 7) };
+          }
+          if (/FROM posts p LEFT JOIN page_views/i.test(sql)) {
+            const out = posts.map((p) => ({
+              slug: p.slug, title: p.title,
+              views: views.filter((v) => v.slug === p.slug).reduce((s, v) => s + v.views, 0),
+            }));
+            out.sort((a, b) => b.views - a.views || (b.updated_at < a.updated_at ? -1 : b.updated_at > a.updated_at ? 1 : 0));
+            return { results: out };
+          }
           if (/FROM audit_log/i.test(sql)) {
             let out = [...audit];
             out.sort((a, b) => (b.created_at < a.created_at ? -1 : b.created_at > a.created_at ? 1 : b.id - a.id));
@@ -90,6 +114,9 @@ function makeMockDB() {
           // 像真实 D1 一样返回快照拷贝，而不是行对象的 live 引用，
           // 否则 PUT 前查到的 existing 会被随后的 UPDATE 原地改掉。
           const copy = (r) => (r ? { ...r } : null);
+          if (/SUM\(views\)/i.test(sql) && /FROM page_views/i.test(sql)) {
+            return { n: views.reduce((s, v) => s + v.views, 0) };
+          }
           if (/WHERE slug = \?/.test(sql)) return copy(posts.find((p) => p.slug === this._params[0]));
           if (/WHERE id = \?/.test(sql)) return copy(posts.find((p) => p.id === this._params[0]));
           return null;
@@ -283,7 +310,7 @@ await t('audit records create, unauth read 401', async () => {
   assertEq(r.status, 200);
   const e = (r.body.entries || []).find((x) => x.action === '新建' && x.post_title === '随笔三');
   assert(e, 'no 新建 entry for 随笔三');
-  assertEq(e.actor, '后台管理员');
+  assertEq(e.actor, 'P主');
 });
 // 23 操作日志：发布与删除的 action
 await t('audit publish + delete actions', async () => {
@@ -299,14 +326,14 @@ await t('audit publish + delete actions', async () => {
   assert(acts.includes('发布'), 'no 发布 entry, got ' + acts.join(','));
   assert(acts.includes('删除'), 'no 删除 entry, got ' + acts.join(','));
 });
-// 24 API 密钥鉴权的 actor 为 API 密钥
-await t('audit actor is API key for X-Miku-Key', async () => {
+// 24 X-Miku-Key 鉴权的 actor 为 Miku
+await t('audit actor is Miku for X-Miku-Key', async () => {
   const r = await callJson(env, '/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Miku-Key': 'test-key-abc' }, body: JSON.stringify({ title: '密钥写的', category: 'moods', content: 'x' }) });
   assertEq(r.status, 201);
   const a = await callJson(env, '/api/audit?limit=5', { headers: { Cookie: sessionCookie } });
   const e = (a.body.entries || []).find((x) => x.post_title === '密钥写的');
   assert(e, 'no entry for 密钥写的');
-  assertEq(e.actor, 'API 密钥');
+  assertEq(e.actor, 'Miku');
 });
 
 // 25 标签往返：新建带 tags（trim/去空/截断 20 字/最多 10 个），读回一致；PUT 改 tags 也一致
@@ -345,6 +372,55 @@ await t('public CORS only for mikufans.site GET /api/posts', async () => {
   const d = await call(env, '/api/posts?status=all', { headers: { Origin: 'https://mikufans.site' } });
   assertEq(d.status, 401);
   assert(!d.headers.get('Access-Control-Allow-Origin'), 'status=all should not get public CORS');
+});
+
+// 27 访问量：非法 slug 400，合法计数，未登录读 /api/views 401
+await t('track invalid slug 400, views unauth 401', async () => {
+  const bad = await callJson(env, '/api/posts/track', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://mikufans.site' }, body: JSON.stringify({ slug: 'a/b' }) });
+  assertEq(bad.status, 400);
+  const empty = await callJson(env, '/api/posts/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  assertEq(empty.status, 400);
+  const v = await callJson(env, '/api/views');
+  assertEq(v.status, 401);
+});
+// 28 访问量：track 两次同一篇 + 一次首页，total=3，perPost 里那篇=2，daily 7 天含今天
+await t('track counts + views totals', async () => {
+  const list = await callJson(env, '/api/posts?status=all', { headers: { Cookie: sessionCookie } });
+  const target = (list.body.posts || []).find((p) => p.slug === 'e3') || list.body.posts[0];
+  assert(target, 'no post to track');
+  for (let k = 0; k < 2; k++) {
+    const r = await callJson(env, '/api/posts/track', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://mikufans.site' }, body: JSON.stringify({ slug: target.slug }) });
+    assertEq(r.status, 200);
+  }
+  const h = await callJson(env, '/api/posts/track', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://mikufans.site' }, body: JSON.stringify({ slug: 'home' }) });
+  assertEq(h.status, 200);
+  const v = await callJson(env, '/api/views', { headers: { Cookie: sessionCookie } });
+  assertEq(v.status, 200);
+  assertEq(v.body.total, 3, 'total should be 3, got ' + v.body.total);
+  assertEq(v.body.daily.length, 7, 'daily should cover 7 days');
+  assertEq(v.body.daily[6].views, 3, 'today should be 3');
+  const per = (v.body.perPost || []).find((p) => p.slug === target.slug);
+  assert(per, 'perPost missing target');
+  assertEq(per.views, 2, 'perPost views should be 2, got ' + per.views);
+});
+// 29.5 our.mikufans.site/admin 已删：/admin 回 404，根路径 / 仍是后台
+await t('our /admin 404, / is admin', async () => {
+  const a = await call(env, '/admin');
+  assertEq(a.status, 404);
+  const b = await call(env, '/admin/');
+  assertEq(b.status, 404);
+  const c = await call(env, '/');
+  assertEq(c.status, 200);
+  assert((await c.text()).includes('管理后台'), 'root should serve admin');
+});
+// 29 访问量：主站跨域 POST /api/posts/track 放行，其他源不放行
+await t('track CORS only for mikufans.site', async () => {
+  const a = await call(env, '/api/posts/track', { method: 'OPTIONS', headers: { Origin: 'https://mikufans.site' } });
+  assertEq(a.status, 204);
+  assertEq(a.headers.get('Access-Control-Allow-Origin'), 'https://mikufans.site');
+  const b = await call(env, '/api/posts/track', { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } });
+  assertEq(b.status, 204);
+  assert(!b.headers.get('Access-Control-Allow-Origin'), 'non-whitelist origin got CORS on track');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

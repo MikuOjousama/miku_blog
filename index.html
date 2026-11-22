@@ -351,7 +351,7 @@
     <button type="button" class="tab" data-view="covers">歌</button>
     <button type="button" class="tab" data-view="essays">随笔</button>
     <button type="button" class="tab" data-view="moods">心情</button>
-    <button type="button" class="tab" data-view="zheteng">折腾日记</button>
+    <button type="button" class="tab" data-view="blog">折腾日记</button>
   </nav>
 
   <!-- 首页 -->
@@ -361,7 +361,7 @@
       <button type="button" class="colcard" data-goto="covers"><span class="num">01 · 歌</span><h3>唱给你听</h3><p>大小姐唱的歌，和喜欢的老歌介绍都在这里，点开就能看这一首的介绍和歌词节选。</p><span class="go">去听歌 →</span></button>
       <button type="button" class="colcard" data-goto="essays"><span class="num">02 · 随笔</span><h3>写字的地方</h3><p>散文和小作文，慢慢写、慢慢看。</p><span class="go">去随笔 →</span></button>
       <button type="button" class="colcard" data-goto="moods"><span class="num">03 · 心情</span><h3>记日子</h3><p>短短的心情日记，一天一条，攒起来就是日子。</p><span class="go">去心情 →</span></button>
-      <button type="button" class="colcard" data-goto="zheteng"><span class="num">04 · 折腾日记</span><h3>P主的折腾日记</h3><p>电脑、网络、调音、装机，折腾过的都记在这儿，代码、表格、清单都齐全。</p><span class="go">去折腾日记 →</span></button>
+      <button type="button" class="colcard" data-goto="blog"><span class="num">04 · 折腾日记</span><h3>P主的折腾日记</h3><p>电脑、网络、调音、装机，折腾过的都记在这儿，代码、表格、清单都齐全。</p><span class="go">去折腾日记 →</span></button>
     </div>
     <div class="sec-head"><h2>最近更新</h2><p>全站最新几篇，点开直接看全文。</p></div>
     <div class="latest" id="latestList"></div>
@@ -386,7 +386,7 @@
   </section>
 
   <!-- 折腾日记 -->
-  <section data-panel="zheteng" hidden>
+  <section data-panel="blog" hidden>
   <div class="controls" id="list">
     <div class="searchrow">
       <label class="search">
@@ -405,7 +405,7 @@
   <p class="count" id="count"></p>
   <main class="grid" id="grid"></main>
 
-  </section><!-- /zheteng -->
+  </section><!-- /blog -->
 
   </div><!-- /listView -->
 
@@ -416,7 +416,7 @@
         <button type="button" class="tab" data-view="covers">歌</button>
         <button type="button" class="tab" data-view="essays">随笔</button>
         <button type="button" class="tab" data-view="moods">心情</button>
-        <button type="button" class="tab" data-view="zheteng" id="tabBackToColumn">折腾日记</button>
+        <button type="button" class="tab" data-view="blog" id="tabBackToColumn">折腾日记</button>
       </nav>
       <div class="breadcrumb" aria-label="面包屑">
         <a href="#list" id="crumbHome">大小姐的小站</a><span class="sep">/</span>
@@ -534,19 +534,19 @@ function renderMD(src){
 
 /* ================= 数据 ================= */
 var ARTICLES=[
-  {id:"a4",title:"家庭 AI 工作站远程接入部署文档",date:"2026-11-17",tags:["网络","远程","Tailscale"],mins:17,real:true,md:"posts/zheteng/a4.md",
+  {id:"a4",title:"家庭 AI 工作站远程接入部署文档",date:"2026-11-17",tags:["网络","远程","Tailscale"],mins:17,real:true,md:"posts/blog/a4.md",
    ex:"在江苏用 MacBook 远程连河北家里的 RTX 4080 工作站跑 ComfyUI：Tailscale 组网、腾讯云北京自建 DERP 中继（Region 900）、Serve 提供 Tailnet 内 HTTPS 入口，不开放公网端口，延迟从 395ms 降到 48ms。"},
-  {id:"a2",title:"Piapro Studio 缩放没反应？先点一下钢琴卷帘",date:"2026-10-17",tags:["Vocaloid","调音"],mins:1,real:true,md:"posts/zheteng/a2.md",
+  {id:"a2",title:"Piapro Studio 缩放没反应？先点一下钢琴卷帘",date:"2026-10-17",tags:["Vocaloid","调音"],mins:1,real:true,md:"posts/blog/a2.md",
    ex:"Mac 版双指开合缩放偶尔没反应，不是触控板坏了，是焦点不在钢琴卷帘上。先点一下让它聚焦，再缩放就跟手了——10 月 17 日实测。"},
-  {id:"a3",title:"给小站加一栏：折腾日记是怎么搭起来的",date:"2026-11-17",tags:["建站","小站"],mins:1,real:true,md:"posts/zheteng/a3.md",
+  {id:"a3",title:"给小站加一栏：折腾日记是怎么搭起来的",date:"2026-11-17",tags:["建站","小站"],mins:1,real:true,md:"posts/blog/a3.md",
    ex:"小站的第四栏归P主：结构和隔壁栏目一模一样，只是正文换我随手写、贴进来自动排版。这篇记了这一栏是怎么搭起来的，以及一篇文章的骨架长什么样。"},
-  {id:"a5",title:"Miku ComfyUI 图像生成环境与工作流手册",date:"2026-11-19",tags:["ComfyUI","AI 绘画"],mins:12,real:true,md:"posts/zheteng/a5.md",
+  {id:"a5",title:"Miku ComfyUI 图像生成环境与工作流手册",date:"2026-11-19",tags:["ComfyUI","AI 绘画"],mins:12,real:true,md:"posts/blog/a5.md",
    ex:"在本机复现 Miku 图像生成环境：WAI-Illustrious v15 + Project DIVA STYLE 与 World is Mine 两组 LoRA（0.8/0.8），832×1216、28 步、CFG 5 的基线参数，通用角色模板与姿势测试结果。"},
-  {id:"a6",title:"Miku 网站：Github 与 .isroot.in 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:8,real:true,md:"posts/zheteng/a6.md",
+  {id:"a6",title:"Miku 网站：Github 与 .isroot.in 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:8,real:true,md:"posts/blog/a6.md",
    ex:"主站走 GitHub Pages，别名走 Cloady Node.js 301 跳转，DNS 托管在 Hurricane Electric：四条 A 记录、ALIAS 踩坑、强制 HTTPS 与完整跳转链路验证。"},
-  {id:"a7",title:"Miku 网站：Cloudflare Pages 与 .loc.cc 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:6,real:true,md:"posts/zheteng/a7.md",
+  {id:"a7",title:"Miku 网站：Cloudflare Pages 与 .loc.cc 域名部署指南",date:"2026-11-19",tags:["建站","域名"],mins:6,real:true,md:"posts/blog/a7.md",
    ex:"两个 .loc.cc 域名绑到同一个 Cloudflare Pages 项目：连接 GitHub 仓库、构建设置、自定义域名绑定与自动部署，另附常见问题排查。"},
-  {id:"a8",title:"Miku网站：MikuFans 域名上线，部署",date:"2026-11-20",tags:["建站","域名"],mins:25,real:true,md:"posts/zheteng/a8.md",
+  {id:"a8",title:"Miku网站：MikuFans 域名上线，部署",date:"2026-11-20",tags:["建站","域名"],mins:25,real:true,md:"posts/blog/a8.md",
    ex:"买下 mikufans.site，DNS 托管切到 Cloudflare，Pages 部署、Email Routing 收信、Resend 发信，再加缓存、www 301、WAF 和自动清缓存，一次讲完。"}
 ];
 /* 正文按需加载 + 缓存：正文在 posts/<栏目>/<id>.md 里，第一次打开某篇时才取出来渲染并缓存，之后再打开直接用缓存，不重复取、不重复渲染。 */
@@ -625,9 +625,9 @@ document.getElementById("randomBtn").addEventListener("click",function(){
 /* ================= 全站数据（其他栏目） ================= */
 var COLUMNS={
   home:{label:"首页"},covers:{label:"歌",author:"大小姐"},essays:{label:"随笔",author:"大小姐"},
-  moods:{label:"心情",author:"大小姐"},zheteng:{label:"折腾日记",author:"P主"}
+  moods:{label:"心情",author:"大小姐"},blog:{label:"折腾日记",author:"P主"}
 };
-ARTICLES.forEach(function(a){a.col="zheteng";});
+ARTICLES.forEach(function(a){a.col="blog";});
 var COVERS=[
   {id:"c2",title:"World is Mine",date:"2026-11-21",tags:["ryo","supercell"],mins:1,real:true,md:"posts/covers/c2.md",
    ex:"2008年5月31日，ryo（supercell）把它投稿到 niconico，从那天起，它就成了我的歌之一。"},
@@ -706,7 +706,7 @@ window.addEventListener("scroll",function(){
   scrollSaveTimer=setTimeout(function(){scrollSaveTimer=null;rememberScroll();},250);
 },{passive:true});
 function viewUrl(view){return basePath+"?view="+encodeURIComponent(view);}
-function articleUrl(id){var it=findItem(id);return basePath+"?view="+encodeURIComponent(it?it.col:"zheteng")+"&post="+encodeURIComponent(id);}
+function articleUrl(id){var it=findItem(id);return basePath+"?view="+encodeURIComponent(it?it.col:"blog")+"&post="+encodeURIComponent(id);}
 function parseRoute(){
   try{
     var sp=new URLSearchParams(location.search);
@@ -764,10 +764,10 @@ function navigateToView(view,restore){
 function navigateToArticle(id){
   if(navState.kind==="article"&&navState.id===id)return;
   rememberScroll();
-  try{history.pushState({kind:"article",view:findItem(id)?findItem(id).col:"zheteng",id:id,scrollY:0},"",articleUrl(id));}catch(e){}
+  try{history.pushState({kind:"article",view:findItem(id)?findItem(id).col:"blog",id:id,scrollY:0},"",articleUrl(id));}catch(e){}
   openArticle(id,0);
 }
-function navigateToList(){navigateToView(cur?cur.col:"zheteng",true);}
+function navigateToList(){navigateToView(cur?cur.col:"blog",true);}
 function applyRoute(r,state){
   var sy=state&&typeof state.scrollY==="number"?state.scrollY:null;
   if(r.kind==="article")openArticle(r.id,sy);
@@ -837,7 +837,7 @@ function buildTOC(){
     });
   });
 }
-function showList(scrollY){showView(navState.view&&COLUMNS[navState.view]?navState.view:"zheteng",scrollY);}
+function showList(scrollY){showView(navState.view&&COLUMNS[navState.view]?navState.view:"blog",scrollY);}
 function goToList(e){
   if(e)e.preventDefault();
   navigateToList();

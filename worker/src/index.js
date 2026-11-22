@@ -8,9 +8,9 @@
 import adminHtml from './admin.html';
 import foreverHtml from './forever.html';
 
-const CATEGORIES = ['covers', 'essays', 'moods', 'zheteng'];
-const CATEGORY_LABEL = { covers: '翻唱', essays: '随笔', moods: '心情', zheteng: '折腾日记' };
-const SLUG_PREFIX = { covers: 'c', essays: 'e', moods: 'm', zheteng: 'a' };
+const CATEGORIES = ['covers', 'essays', 'moods', 'blog'];
+const CATEGORY_LABEL = { covers: '翻唱', essays: '随笔', moods: '心情', blog: '折腾日记' };
+const SLUG_PREFIX = { covers: 'c', essays: 'e', moods: 'm', blog: 'a' };
 const POST_COLUMNS = 'id, title, slug, category, content, excerpt, status, author, created_at, updated_at, published_at';
 
 // ---------- 小工具 ----------

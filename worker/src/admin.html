@@ -223,10 +223,9 @@
       <button type="button" class="nav-item" data-nav="covers"><span class="ico">🎤</span>翻唱<span class="cnt" id="cnt-covers">0</span></button>
       <button type="button" class="nav-item" data-nav="essays"><span class="ico">✎</span>随笔<span class="cnt" id="cnt-essays">0</span></button>
       <button type="button" class="nav-item" data-nav="moods"><span class="ico">☁</span>心情<span class="cnt" id="cnt-moods">0</span></button>
-      <button type="button" class="nav-item" data-nav="zheteng"><span class="ico">⚙</span>折腾日记<span class="cnt" id="cnt-zheteng">0</span></button>
+      <button type="button" class="nav-item" data-nav="blog"><span class="ico">⚙</span>折腾日记<span class="cnt" id="cnt-blog">0</span></button>
       <div class="nav-label">管理</div>
       <button type="button" class="nav-item" data-nav="drafts"><span class="ico">▤</span>草稿箱<span class="cnt" id="cnt-drafts">0</span></button>
-      <button type="button" class="nav-item" data-nav="d1"><span class="ico">🗄</span>数据 D1</button>
     </nav>
     <div class="side-foot">
       <div class="d1-mini">
@@ -264,7 +263,7 @@
         <div class="ed-body">
           <div class="ed-title-row">
             <input id="fTitle" placeholder="文章标题" aria-label="标题">
-            <select id="fCategory" aria-label="栏目"><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
+            <select id="fCategory" aria-label="栏目"><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="blog">折腾日记</option></select>
           </div>
           <div class="row3">
             <div><label>状态</label><select id="fPostStatus"><option value="draft">草稿</option><option value="published">已发布</option></select></div>
@@ -296,7 +295,7 @@
         <section class="card list-card">
           <div class="card-head"><h2>最近文章</h2><button type="button" class="linklike" id="viewAllLink">查看全部 →</button></div>
           <div class="filters">
-            <select id="fCat"><option value="">全部栏目</option><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="zheteng">折腾日记</option></select>
+            <select id="fCat"><option value="">全部栏目</option><option value="covers">翻唱</option><option value="essays">随笔</option><option value="moods">心情</option><option value="blog">折腾日记</option></select>
             <select id="fStatus"><option value="all">全部状态</option><option value="published">已发布</option><option value="draft">草稿</option></select>
             <input id="fQ" type="search" placeholder="按标题搜索…">
             <button type="button" class="btn" id="refreshBtn">刷新</button>
@@ -369,8 +368,8 @@
   }
   var editingId=null,allPosts=[];
   var $=function(id){return document.getElementById(id);};
-  var CATEGORY_LABEL={covers:'翻唱',essays:'随笔',moods:'心情',zheteng:'折腾日记'};
-  var NAV_TITLES={all:'仪表盘',covers:'翻唱',essays:'随笔',moods:'心情',zheteng:'折腾日记',drafts:'草稿箱',d1:'数据 D1'};
+  var CATEGORY_LABEL={covers:'翻唱',essays:'随笔',moods:'心情',blog:'折腾日记'};
+  var NAV_TITLES={all:'仪表盘',covers:'翻唱',essays:'随笔',moods:'心情',blog:'折腾日记',drafts:'草稿箱'};
   // D1 时间是 UTC 的 YYYY-MM-DD HH:MM:SS，按 UTC 解析、按本地显示
   function parseSqlTime(s){
     if(!s)return null;
@@ -475,7 +474,7 @@
     var now=new Date(),y=now.getUTCFullYear(),mo=now.getUTCMonth();
     var weekAgo=Date.now()-7*24*3600*1000;
     var lastStr=null,lastMs=0;
-    var counts={covers:0,essays:0,moods:0,zheteng:0};
+    var counts={covers:0,essays:0,moods:0,blog:0};
     allPosts.forEach(function(p){
       if(p.status==='published'){pub++;}else{drafts++;}
       if(counts[p.category]!==undefined)counts[p.category]++;
@@ -498,7 +497,7 @@
     $('cnt-covers').textContent=counts.covers;
     $('cnt-essays').textContent=counts.essays;
     $('cnt-moods').textContent=counts.moods;
-    $('cnt-zheteng').textContent=counts.zheteng;
+    $('cnt-blog').textContent=counts.blog;
     $('cnt-drafts').textContent=drafts;
     $('kvTotal').textContent=total;
     $('kvPubDraft').textContent=pub+' / '+drafts;
@@ -523,13 +522,6 @@
   document.querySelectorAll('.nav-item').forEach(function(b){
     b.onclick=function(){
       var v=b.getAttribute('data-nav');
-      if(v==='d1'){
-        var el=$('d1Card');
-        el.scrollIntoView({behavior:'smooth',block:'start'});
-        el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
-        $('crumbTitle').textContent='数据 D1';
-        return;
-      }
       if(v==='drafts'){$('fCat').value='';$('fStatus').value='draft';}
       else if(v==='all'){$('fCat').value='';$('fStatus').value='all';}
       else{$('fCat').value=v;$('fStatus').value='all';}
@@ -545,8 +537,31 @@
     if(toastTimer)clearTimeout(toastTimer);
     toastTimer=setTimeout(function(){t.classList.remove('show');},2600);
   }
-  // 导出备份：Worker 暂无导出接口，先做诚实占位，不假装已实现
-  $('exportBtn').onclick=function(){showToast('导出功能还没接 D1 导出接口，稍后再来。');};
+  // 导出备份：拉取全量文章，前端拼成 JSON 文件下载
+  $('exportBtn').onclick=async function(){
+    var btn=$('exportBtn');
+    btn.disabled=true;
+    try{
+      var d=await api('/api/posts?status=all&limit=100');
+      var posts=(d&&d.posts)||[];
+      var pub=0,draft=0;
+      posts.forEach(function(p){if(p.status==='published')pub++;else if(p.status==='draft')draft++;});
+      var now=new Date();
+      var fname='mikufans-backup-'+now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'.json';
+      var backup={exported_at:now.toISOString(),site:'mikufans',version:1,counts:{total:posts.length,published:pub,draft:draft},posts:posts};
+      var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;a.download=fname;
+      document.body.appendChild(a);a.click();a.remove();
+      URL.revokeObjectURL(url);
+      showToast('已导出 '+posts.length+' 篇文章');
+    }catch(e){
+      showToast('导出失败，请重试');
+    }finally{
+      btn.disabled=false;
+    }
+  };
   function updateWc(){
     var v=$('fContent').value||'';
     $('wc').textContent=v.length+' 字';
@@ -561,7 +576,7 @@
     else{tag.textContent='草稿 · 未发布';tag.className='tag amber';}
     $('fTitle').value=p?p.title:'';
     // 新建默认值：栏目折腾日记、作者 P主；编辑旧文章时显示该文章真实的栏目与作者
-    $('fCategory').value=p?p.category:'zheteng';
+    $('fCategory').value=p?p.category:'blog';
     $('fPostStatus').value=p?p.status:'draft';
     $('fAuthor').value=p?p.author:'P主';
     $('fExcerpt').value=p?p.excerpt||'':'';
@@ -599,7 +614,7 @@
       await loadList();openEditor(d.id);loadAudit();
     }catch(e){
       if(String(e.message).indexOf('slug_conflict')>=0)showErr('保存失败：slug 冲突，请再试一次。');
-      else if(String(e.message).indexOf('invalid_category')>=0)showErr('保存失败：栏目只能是 covers / essays / moods / zheteng。');
+      else if(String(e.message).indexOf('invalid_category')>=0)showErr('保存失败：栏目只能是 covers / essays / moods / blog。');
       else showErr('保存失败：'+e.message);
     }
   }

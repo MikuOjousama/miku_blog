@@ -540,6 +540,7 @@ function renderMD(src){
    列表走轻量接口（summary=1，不含正文）；打开文章时正文另走单篇接口取。 */
 var API_POSTS_URL='https://our.mikufans.site/api/posts?limit=100&summary=1';
 var API_POST_URL='https://our.mikufans.site/api/posts/';
+var API_POSTS_FULL_URL='https://our.mikufans.site/api/posts?limit=100';
 /* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
 function trackView(slug){
   try{
@@ -598,6 +599,30 @@ function loadSiteData(){
     ALLTAGS=[];ARTICLES.forEach(function(a){a.tags.forEach(function(t){if(ALLTAGS.indexOf(t)<0)ALLTAGS.push(t);});});
     DATA_READY=true;
   });
+}
+
+/* 预加载：首页完全打开后，浏览器空闲时悄悄取一次全文填进缓存，
+   点开文章就不用等了，站内搜正文也恢复了。省流量模式 / 网很慢时不跑，每页只跑一次。 */
+var preloadDone=false;
+function preloadFullArticles(){
+  if(preloadDone)return; preloadDone=true;
+  try{
+    var conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(conn&&(conn.saveData||conn.effectiveType==='slow-2g'||conn.effectiveType==='2g'))return;
+  }catch(e){}
+  fetch(API_POSTS_FULL_URL).then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(d){
+    var posts=(d&&Array.isArray(d.posts))?d.posts:[];
+    posts.forEach(function(p){
+      if(typeof p.content!=='string'||!p.content)return;
+      var md=p.content.replace(/^\n+|\s+$/g,'');
+      mdCache[p.slug]=md;
+      for(var i=0;i<ALLITEMS.length;i++){if(ALLITEMS[i].id===p.slug){ALLITEMS[i].content=p.content;break;}}
+    });
+  }).catch(function(){});
+}
+function schedulePreload(){
+  if(typeof requestIdleCallback==='function'){requestIdleCallback(function(){preloadFullArticles();},{timeout:5000});}
+  else{setTimeout(preloadFullArticles,3000);}
 }
 
 /* ================= 列表 ================= */
@@ -980,6 +1005,7 @@ grid.innerHTML='<div class="empty">正在加载…</div>';
 loadSiteData().then(function(){
   var pc=document.getElementById("postCount"); if(pc) pc.textContent=ALLITEMS.length;
   renderChips();renderList();renderOtherColumns();route();
+  schedulePreload();
 }).catch(function(){
   DATA_FAILED=true;
   var pc=document.getElementById("postCount"); if(pc) pc.textContent="0";

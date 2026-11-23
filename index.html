@@ -985,6 +985,11 @@ loadSiteData().then(function(){
   var pc=document.getElementById("postCount"); if(pc) pc.textContent="0";
   renderChips();renderList();renderOtherColumns();route();
 });
+
+/* 控制台小彩蛋：打开开发者工具才能看到的一句话 */
+(function(){
+  try{console.log('%c你找到我啦，这里是大小姐的小站 ♪','color:#39C5BB;font-size:13px;font-weight:bold;');}catch(e){}
+})();
 </script>
 </body>
 </html>

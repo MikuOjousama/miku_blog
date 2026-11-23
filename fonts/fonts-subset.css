@@ -1,5 +1,12 @@
-/* Subset fonts: headings use the Serif subset, body uses system fonts.
-   2 files total, no fonts.css needed. Unseen characters fall back to system fonts. */
+/* Subset fonts: only the characters used on the site (25 D1 posts + index).
+   3 files total, no fonts.css needed. Unseen characters fall back to system fonts. */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(/fonts/NotoSansSC-subset.woff2) format('woff2');
+}
 @font-face {
   font-family: 'Noto Serif SC';
   font-style: normal;

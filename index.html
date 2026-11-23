@@ -601,8 +601,9 @@ function loadSiteData(){
   });
 }
 
-/* 预加载：首页完全打开后，浏览器空闲时悄悄取一次全文填进缓存，
-   点开文章就不用等了，站内搜正文也恢复了。省流量模式 / 网很慢时不跑，每页只跑一次。 */
+/* 预加载：首页完全打开后，浏览器空闲时悄悄取一次全文，只填正文缓存（mdCache），
+   点开文章就不用等了，站内搜正文也恢复了。绝不碰列表数据：最近更新、卡片、
+   栏目都只认轻量接口的数据，全量接口再也覆盖不了它们。省流量模式 / 网很慢时不跑，每页只跑一次。 */
 var preloadDone=false;
 function preloadFullArticles(){
   if(preloadDone)return; preloadDone=true;
@@ -614,9 +615,7 @@ function preloadFullArticles(){
     var posts=(d&&Array.isArray(d.posts))?d.posts:[];
     posts.forEach(function(p){
       if(typeof p.content!=='string'||!p.content)return;
-      var md=p.content.replace(/^\n+|\s+$/g,'');
-      mdCache[p.slug]=md;
-      for(var i=0;i<ALLITEMS.length;i++){if(ALLITEMS[i].id===p.slug){ALLITEMS[i].content=p.content;break;}}
+      mdCache[p.slug]=p.content.replace(/^\n+|\s+$/g,'');
     });
   }).catch(function(){});
 }

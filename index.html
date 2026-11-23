@@ -552,6 +552,14 @@ function trackView(slug){
 }
 var ARTICLES=[],COVERS=[],ESSAYS=[],MOODS=[],ALLITEMS=[];
 var DATA_READY=false,DATA_FAILED=false;
+/* 定死的顺序门：只有轻量接口渲染完、且浏览器真正落画一次后，
+   LIST_RENDERED 才会变成 true；预加载没拿到这个门，连调度都不调度。 */
+var LIST_RENDERED=false;
+function waitForPaint(){
+  return new Promise(function(res){
+    requestAnimationFrame(function(){requestAnimationFrame(function(){res();});});
+  });
+}
 function mapPost(p){
   var content=typeof p.content==='string'?p.content:'';
   var clen=content.length||(typeof p.content_length==='number'?p.content_length:0);
@@ -601,12 +609,14 @@ function loadSiteData(){
   });
 }
 
-/* 预加载：首页完全打开后，浏览器空闲时悄悄取一次全文，只填正文缓存（mdCache），
+/* 预加载：只在轻量渲染落画之后才跑，悄悄取一次全文，只填正文缓存（mdCache），
    点开文章就不用等了，站内搜正文也恢复了。绝不碰列表数据：最近更新、卡片、
-   栏目都只认轻量接口的数据，全量接口再也覆盖不了它们。省流量模式 / 网很慢时不跑，每页只跑一次。 */
+   栏目都只认轻量接口的数据，全量接口再也覆盖不了它们；全量取回来也不调用
+   任何渲染函数，不会自己触发刷新。省流量模式 / 网很慢时不跑，每页只跑一次。 */
 var preloadDone=false;
 function preloadFullArticles(){
   if(preloadDone)return; preloadDone=true;
+  if(!LIST_RENDERED)return;
   try{
     var conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
     if(conn&&(conn.saveData||conn.effectiveType==='slow-2g'||conn.effectiveType==='2g'))return;
@@ -615,11 +625,15 @@ function preloadFullArticles(){
     var posts=(d&&Array.isArray(d.posts))?d.posts:[];
     posts.forEach(function(p){
       if(typeof p.content!=='string'||!p.content)return;
+      if(!findItem(p.slug))return;
       mdCache[p.slug]=p.content.replace(/^\n+|\s+$/g,'');
     });
+    /* 到这里为止：只写了 mdCache。没有 renderList，没有 renderOtherColumns，
+       没有 route，没有任何刷新；最近更新长什么样，全量回来也不会动它。 */
   }).catch(function(){});
 }
 function schedulePreload(){
+  if(!LIST_RENDERED)return;
   if(typeof requestIdleCallback==='function'){requestIdleCallback(function(){preloadFullArticles();},{timeout:5000});}
   else{setTimeout(preloadFullArticles,3000);}
 }
@@ -999,13 +1013,19 @@ function copyText(text,msg){
   else{el.textContent=days;}
 })();
 
-/* 先取接口再渲染：列表、栏目、路由都依赖文章数据；失败时页面其余部分照常可用。 */
+/* 先取接口再渲染：列表、栏目、路由都依赖文章数据；失败时页面其余部分照常可用。
+   顺序定死：轻量接口 -> 渲染（最近更新就在这一步出来）-> 等浏览器落画 ->
+   才把 LIST_RENDERED 置 true、调度预加载；轻量失败不走预加载。 */
 grid.innerHTML='<div class="empty">正在加载…</div>';
 loadSiteData().then(function(){
   var pc=document.getElementById("postCount"); if(pc) pc.textContent=ALLITEMS.length;
   renderChips();renderList();renderOtherColumns();route();
+  return waitForPaint();
+}).then(function(){
+  LIST_RENDERED=true;
   schedulePreload();
 }).catch(function(){
+  if(DATA_READY)return;
   DATA_FAILED=true;
   var pc=document.getElementById("postCount"); if(pc) pc.textContent="0";
   renderChips();renderList();renderOtherColumns();route();

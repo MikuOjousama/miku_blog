@@ -536,9 +536,10 @@ function renderMD(src){
 }
 
 /* ================= 数据（从接口读） ================= */
-/* 文章不再是仓库里的静态数组：页面加载时从公开接口取已发布文章，
-   正文本来就在接口返回的 content 里，不再 fetch .md 文件。 */
-var API_POSTS_URL='https://our.mikufans.site/api/posts?limit=100';
+/* 文章不再是仓库里的静态数组：页面加载时从公开接口取已发布文章。
+   列表走轻量接口（summary=1，不含正文）；打开文章时正文另走单篇接口取。 */
+var API_POSTS_URL='https://our.mikufans.site/api/posts?limit=100&summary=1';
+var API_POST_URL='https://our.mikufans.site/api/posts/';
 /* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
 function trackView(slug){
   try{
@@ -552,22 +553,33 @@ var ARTICLES=[],COVERS=[],ESSAYS=[],MOODS=[],ALLITEMS=[];
 var DATA_READY=false,DATA_FAILED=false;
 function mapPost(p){
   var content=typeof p.content==='string'?p.content:'';
+  var clen=content.length||(typeof p.content_length==='number'?p.content_length:0);
   return {
     id:p.slug, title:p.title,
     date:String(p.published_at||p.created_at||'').substring(0,10),
     col:p.category, tags:Array.isArray(p.tags)?p.tags:[],
-    mins:Math.max(1,Math.ceil(content.length/400)),
+    mins:Math.max(1,Math.ceil(clen/400)),
     real:true, ex:typeof p.excerpt==='string'?p.excerpt:'',
     content:content, author:typeof p.author==='string'?p.author:'Miku'
   };
 }
-/* 正文已在接口返回里：loadMd 直接用条目自带的 content，保持返回 Promise 的形态。 */
+/* 列表是轻量接口（无正文）：loadMd 先用条目自带的 content，没有就取单篇接口。 */
 var mdCache={},htmlCache={};
 function loadMd(a){
   if(mdCache[a.id]!=null)return Promise.resolve(mdCache[a.id]);
-  var md=String(a.content||'').replace(/^\n+|\s+$/g,'');
-  mdCache[a.id]=md;
-  return Promise.resolve(md);
+  if(a.content){
+    var md=String(a.content).replace(/^\n+|\s+$/g,'');
+    mdCache[a.id]=md;
+    return Promise.resolve(md);
+  }
+  if(!a.real){mdCache[a.id]='';return Promise.resolve('');}
+  return fetch(API_POST_URL+encodeURIComponent(a.id)).then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(p){
+    var c=typeof p.content==='string'?p.content:'';
+    a.content=c;
+    var md2=c.replace(/^\n+|\s+$/g,'');
+    mdCache[a.id]=md2;
+    return md2;
+  });
 }
 function readMins(a){return a.mins||1;}
 var ALLTAGS=[];
@@ -580,8 +592,9 @@ function loadSiteData(){
     ESSAYS=items.filter(function(a){return a.col==='essays';});
     MOODS=items.filter(function(a){return a.col==='moods';});
     ALLITEMS=items.slice();
-    /* 正文已在内存里：放进 mdCache，搜索正文、打开文章都不再发请求 */
-    ALLITEMS.forEach(function(a){mdCache[a.id]=String(a.content||'').replace(/^\n+|\s+$/g,'');});
+    /* 轻量列表无正文：只缓存自带正文的条目；其余打开文章时再取单篇。
+       注意：站内搜索因此只搜标题/摘要/标签，不再搜正文全文。 */
+    ALLITEMS.forEach(function(a){if(a.content)mdCache[a.id]=String(a.content).replace(/^\n+|\s+$/g,'');});
     ALLTAGS=[];ARTICLES.forEach(function(a){a.tags.forEach(function(t){if(ALLTAGS.indexOf(t)<0)ALLTAGS.push(t);});});
     DATA_READY=true;
   });

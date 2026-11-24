@@ -24,7 +24,7 @@
     --line-teal:rgba(57,197,187,.35);
   }
   *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
+  html{scroll-behavior:smooth;scroll-padding-top:80px}
   body{
     margin:0;
     background:var(--bg);
@@ -40,8 +40,11 @@
 
   /* ---------- 顶栏 ---------- */
   .topbar{
-    position:absolute;top:0;left:0;right:0;z-index:2;
+    position:fixed;top:0;left:0;right:0;z-index:10;
     padding:20px 24px;
+    background:rgba(21,37,42,.88);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
   }
   .topbar-in{
     max-width:700px;margin:0 auto;

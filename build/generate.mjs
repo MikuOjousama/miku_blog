@@ -8,7 +8,6 @@
 //       把文章正文预渲染进 #rcontent。页面 JS 加载后会照常接管渲染，
 //       静态正文只负责让爬虫和无 JS 的访客直接读到全文，两边内容同源同渲染。
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -50,13 +49,9 @@ const data = await res.json();
 const posts = (data.posts || []).filter((p) => p && p.slug && p.title);
 if (!posts.length) throw new Error('接口返回 0 篇文章，已中止，避免生成空站');
 
-// —— 数据版本戳：按本批文章内容算 hash，内容不变戳就不变（缓存照样热），
-// 内容一变戳就变、数据文件全换新地址。/data/ 被缓存规则长 TTL 攥住时，
-// 旧地址再顽固也挡不住新页面去取新地址（2026-11-25 a10 发文后实测旧名单
-// 在 CDN 上轮流出现，才加的这一手）。模板里的 __DATA_V__ 占位符在此替换。
-const DATA_V = createHash('sha256').update(JSON.stringify(posts)).digest('hex').slice(0, 10);
-const tpl = template.split('__DATA_V__').join(DATA_V);
-console.log(`数据版本戳：${DATA_V}`);
+// 数据文件固定地址即可：Pages 按部署供数、zone 层缓存已撤，
+// 旧的内容版本戳（按 hash 换数据地址）已于 2026-11-25 深夜拆除。
+const tpl = template;
 console.log(`已发布文章 ${posts.length} 篇，开始生成…`);
 
 // —— 最近更新：按发布日倒序取最新 5 篇（与前台 renderOtherColumns 同口径，
@@ -153,13 +148,10 @@ const summaryPosts = posts.map((p) => {
 // 无戳版照旧写：给还攥着旧页面的访客兜底；新页面一律按戳取数。
 writeFileSync(join(dataDir, 'posts-summary.json'), JSON.stringify({ posts: summaryPosts }));
 writeFileSync(join(dataDir, 'posts.json'), JSON.stringify({ posts }));
-writeFileSync(join(dataDir, `posts-summary.${DATA_V}.json`), JSON.stringify({ posts: summaryPosts }));
-writeFileSync(join(dataDir, `posts.${DATA_V}.json`), JSON.stringify({ posts }));
 for (const p of posts) {
   writeFileSync(join(dataDir, `post-${p.slug}.json`), JSON.stringify(p));
-  writeFileSync(join(dataDir, `post-${p.slug}.${DATA_V}.json`), JSON.stringify(p));
 }
-console.log(`✓ 静态数据已生成：data/posts-summary.json、data/posts.json（预热）、单篇 × ${posts.length}，均另有 .${DATA_V} 版`);
+console.log(`✓ 静态数据已生成：data/posts-summary.json、data/posts.json（预热）、单篇 × ${posts.length}`);
 
 // —— sitemap：首页 + 每篇 canonical 地址，lastmod 用文章更新日
 const urls = [`  <url><loc>${SITE}/</loc><priority>1.0</priority></url>`]
@@ -179,8 +171,4 @@ for (const p of latest5) {
   }
 }
 console.log(`✓ 首页最近更新已静态化：${latest5.map((p) => p.slug).join(', ')}`);
-if (!homeHtml.includes(DATA_V)) {
-  throw new Error('首页自检失败：没找到数据版本戳（模板里的 __DATA_V__ 占位符丢了？）');
-}
-console.log(`✓ 首页已盖数据版本戳：${DATA_V}`);
 console.log('生成完毕。');

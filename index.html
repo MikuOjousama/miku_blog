@@ -544,6 +544,7 @@ function renderMD(src){
    列表走轻量索引（不含正文），点开文章时按需取单篇 JSON；访客侧不请求后端接口。 */
 var API_POSTS_URL='/data/posts-summary.json';
 var API_POST_URL='/data/post-';
+var API_POSTS_FULL_URL='/data/posts.json';
 /* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
 function trackView(slug){
   try{
@@ -609,6 +610,35 @@ function loadSiteData(){
     ALLTAGS=[];ARTICLES.forEach(function(a){a.tags.forEach(function(t){if(ALLTAGS.indexOf(t)<0)ALLTAGS.push(t);});});
     DATA_READY=true;
   });
+}
+
+/* 预热：只在轻量渲染落画之后才跑，空闲时悄悄取一次全量，只填正文缓存（mdCache），
+   点开文章就能秒开；漏网没填到的，loadMd 再走单篇 JSON 兜底。预热绝不碰列表数据：
+   最近更新、卡片、栏目都只认轻量索引；取回来也不调用任何渲染函数，不会触发刷新。
+   省流量模式 / 网很慢时不跑，每页只跑一次。 */
+var preloadDone=false;
+function preloadFullArticles(){
+  if(preloadDone)return; preloadDone=true;
+  if(!LIST_RENDERED)return;
+  try{
+    var conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(conn&&(conn.saveData||conn.effectiveType==='slow-2g'||conn.effectiveType==='2g'))return;
+  }catch(e){}
+  fetch(API_POSTS_FULL_URL).then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(d){
+    var posts=(d&&Array.isArray(d.posts))?d.posts:[];
+    posts.forEach(function(p){
+      if(typeof p.content!=='string'||!p.content)return;
+      if(!findItem(p.slug))return;
+      mdCache[p.slug]=p.content.replace(/^\\n+|\\s+$/g,'');
+    });
+    /* 到这里为止：只写了 mdCache。没有 renderList，没有 renderOtherColumns，
+       没有 route，没有任何刷新；最近更新长什么样，全量回来也不会动它。 */
+  }).catch(function(){});
+}
+function schedulePreload(){
+  if(!LIST_RENDERED)return;
+  if(typeof requestIdleCallback==='function'){requestIdleCallback(function(){preloadFullArticles();},{timeout:5000});}
+  else{setTimeout(preloadFullArticles,3000);}
 }
 
 /* ================= 列表 ================= */
@@ -994,6 +1024,7 @@ loadSiteData().then(function(){
   return waitForPaint();
 }).then(function(){
   LIST_RENDERED=true;
+  schedulePreload();
 }).catch(function(){
   if(DATA_READY)return;
   DATA_FAILED=true;

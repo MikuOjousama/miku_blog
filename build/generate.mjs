@@ -1,7 +1,7 @@
 // MikuFans SSG 生成器（方案一：Webhook 自动构建用）
 // 用途：Cloudflare Pages 构建时运行，从公开接口拉已发布文章，
-//       为每篇生成 /post/<slug>/index.html（正文直接印进 HTML 源码）
-//       并重生 sitemap.xml。后台写文章的流程不变。
+//       为每篇生成 /post/<slug>/index.html（正文直接印进 HTML 源码）、
+//       为每个栏目生成 /<栏目>/index.html，并重生 sitemap.xml。后台写文章的流程不变。
 // 用法：node generate.mjs [--template index.html] [--out <输出目录>] [--api https://our.mikufans.site]
 // 说明：输出目录就是站点根：模板本身会原样复制为 index.html（首页仍走 SPA），
 //       文章页是模板的克隆：换标题/描述/canonical、填好面包屑、
@@ -21,10 +21,10 @@ const API = opt('api', 'https://our.mikufans.site');
 const SITE = 'https://mikufans.site';
 
 const COLUMNS = {
-  covers: { label: '歌', author: '大小姐' },
-  essays: { label: '随笔', author: '大小姐' },
-  moods: { label: '心情', author: '大小姐' },
-  blog: { label: '折腾日记', author: 'P主' },
+  covers: { label: '歌', author: '大小姐', desc: '大小姐唱过的歌，和喜欢的老歌介绍，一首一首慢慢讲。' },
+  essays: { label: '随笔', author: '大小姐', desc: '散文和小作文，慢慢写、慢慢看。' },
+  moods: { label: '心情', author: '大小姐', desc: '短短的心情，一天一条，攒起来就是日子。' },
+  blog: { label: '折腾日记', author: 'P主', desc: 'P主的折腾日记：电脑、网络、调音、装机，折腾过的都记在这儿。' },
 };
 
 const template = readFileSync(TEMPLATE, 'utf8');
@@ -135,6 +135,33 @@ for (const p of posts) {
 }
 if (fail) throw new Error(`${fail} 篇自检失败，已中止整次生成`);
 
+// —— 栏目页：每个栏目一页 /<栏目>/，与文章页同法克隆模板：
+//    换标题/描述/canonical、把该栏目面板预设为可见（JS 接管后按路由重排，不冲突）。
+//    栏目从此有自己的干净地址，不再靠首页的 ?view= 参数区分。
+for (const [key, col] of Object.entries(COLUMNS)) {
+  const canonical = `${SITE}/${key}/`;
+  let html = injectLatest(tpl);
+  html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(col.label)} · MikuFans</title>`);
+  html = html.replace(
+    /<meta name="description" content="[^"]*" \/>/,
+    `<meta name="description" content="${esc(col.desc)}" />\n` +
+    `<link rel="canonical" href="${canonical}" />\n` +
+    `<meta property="og:type" content="website" />\n` +
+    `<meta property="og:title" content="${esc(col.label)} · MikuFans" />\n` +
+    `<meta property="og:description" content="${esc(col.desc)}" />\n` +
+    `<meta property="og:url" content="${canonical}" />`
+  );
+  html = html.replace('<section data-panel="home">', '<section data-panel="home" hidden>');
+  html = html.replace(`<section data-panel="${key}" hidden>`, `<section data-panel="${key}">`);
+  if (!html.includes(`<title>${esc(col.label)} · MikuFans</title>`) || !html.includes(`href="${canonical}"`) || html.includes(`<section data-panel="${key}" hidden>`)) {
+    throw new Error(`栏目页 ${key} 自检失败，已中止整次生成`);
+  }
+  const dir = join(OUT, key);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'index.html'), html);
+  console.log(`✓ /${key}/ 《${col.label}》 ${(html.length / 1024).toFixed(0)}KB`);
+}
+
 // —— 静态数据：前台改读同源静态 JSON，访客不再请求后端接口。
 // posts-summary.json 是轻量索引（去正文、带 content_length），列表渲染全靠它；
 // posts.json 是全量（含正文），只作空闲预热填正文缓存用，列表不读它；
@@ -153,15 +180,22 @@ for (const p of posts) {
 }
 console.log(`✓ 静态数据已生成：data/posts-summary.json、data/posts.json（预热）、单篇 × ${posts.length}`);
 
-// —— sitemap：首页 + 每篇 canonical 地址，lastmod 用文章更新日
+// —— sitemap：首页 + 四个栏目页 + 每篇 canonical 地址，lastmod 用文章更新日
+const colUrls = Object.keys(COLUMNS).map((key) => {
+  const lm = posts.filter((p) => p.category === key)
+    .map((p) => String(p.updated_at || p.published_at || '').substring(0, 10))
+    .sort().pop() || '';
+  return `  <url><loc>${SITE}/${key}/</loc>${lm ? `<lastmod>${lm}</lastmod>` : ''}<priority>0.6</priority></url>`;
+});
 const urls = [`  <url><loc>${SITE}/</loc><priority>1.0</priority></url>`]
+  .concat(colUrls)
   .concat(posts.map((p) => {
     const lm = String(p.updated_at || p.published_at || '').substring(0, 10);
     return `  <url><loc>${SITE}/post/${p.slug}/</loc>${lm ? `<lastmod>${lm}</lastmod>` : ''}<priority>0.8</priority></url>`;
   })).join('\n');
 writeFileSync(join(OUT, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
-console.log(`✓ sitemap.xml 重生：${posts.length + 1} 条 URL`);
+console.log(`✓ sitemap.xml 重生：${posts.length + 1 + colUrls.length} 条 URL`);
 
 // 首页自检：最近更新 5 篇的链接必须都在首页源码里
 const homeHtml = readFileSync(join(OUT, 'index.html'), 'utf8');

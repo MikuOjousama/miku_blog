@@ -760,7 +760,7 @@ window.addEventListener("scroll",function(){
   if(scrollSaveTimer)return;
   scrollSaveTimer=setTimeout(function(){scrollSaveTimer=null;rememberScroll();},250);
 },{passive:true});
-function viewUrl(view){return view==="home"?basePath:basePath+"?view="+encodeURIComponent(view);}
+function viewUrl(view){return view==="home"?basePath:"/"+encodeURIComponent(view)+"/";}
 function articleUrl(id){return "/post/"+encodeURIComponent(id)+"/";}
 function parseRoute(){
   try{
@@ -772,6 +772,8 @@ function parseRoute(){
   }catch(e){}
   var pm=location.pathname.match(/\/post\/([A-Za-z0-9_-]+)\/?$/);
   if(pm&&findItem(pm[1]))return{kind:"article",view:findItem(pm[1]).col,id:pm[1]};
+  var cm=location.pathname.match(/^\/(covers|essays|moods|blog)\/?$/);
+  if(cm)return{kind:"list",view:cm[1],id:null};
   var hm=(location.hash||"").match(/^#post-(.+)$/);
   if(hm&&findItem(hm[1]))return{kind:"article",view:findItem(hm[1]).col,id:hm[1]};
   return{kind:"list",view:"home",id:null};
@@ -904,8 +906,8 @@ function goHome(e){
   navigateToView("home",true);
 }
 function route(){
-  // 首次打开：按当前 URL 定格初始历史记录（旧 #post- / ?post= 链接
-  // 统一归整成干净路径 /post/<id>/、栏目归整成 /?view=<栏目>），再渲染对应视图。
+  // 首次打开：按当前 URL 定格初始历史记录（旧 #post- / ?post= / ?view= 链接
+  // 统一归整成干净路径 /post/<id>/、栏目归整成 /<栏目>/），再渲染对应视图。
   var r=parseRoute();
   try{
     history.replaceState({kind:r.kind,view:r.view,id:r.id,scrollY:0},"",r.kind==="article"?articleUrl(r.id):(r.view==="home"?basePath:viewUrl(r.view)));

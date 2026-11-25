@@ -1,0 +1,124 @@
+// MikuFans SSG 生成器（方案一：Webhook 自动构建用）
+// 用途：Cloudflare Pages 构建时运行，从公开接口拉已发布文章，
+//       为每篇生成 /post/<slug>/index.html（正文直接印进 HTML 源码）
+//       并重生 sitemap.xml。后台写文章的流程不变。
+// 用法：node generate.mjs [--template index.html] [--out <输出目录>] [--api https://our.mikufans.site]
+// 说明：输出目录就是站点根：模板本身会原样复制为 index.html（首页仍走 SPA），
+//       文章页是模板的克隆：换标题/描述/canonical、填好面包屑、
+//       把文章正文预渲染进 #rcontent。页面 JS 加载后会照常接管渲染，
+//       静态正文只负责让爬虫和无 JS 的访客直接读到全文，两边内容同源同渲染。
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const args = process.argv.slice(2);
+function opt(name, dflt) {
+  const i = args.indexOf('--' + name);
+  return i >= 0 && args[i + 1] ? args[i + 1] : dflt;
+}
+const TEMPLATE = opt('template', 'index.html');
+const OUT = opt('out', '.');
+const API = opt('api', 'https://our.mikufans.site');
+const SITE = 'https://mikufans.site';
+
+const COLUMNS = {
+  covers: { label: '歌', author: '大小姐' },
+  essays: { label: '随笔', author: '大小姐' },
+  moods: { label: '心情', author: '大小姐' },
+  blog: { label: '折腾日记', author: 'P主' },
+};
+
+const template = readFileSync(TEMPLATE, 'utf8');
+
+// —— 复用前台自己的渲染函数：从模板里原样抽 esc / inline / renderMD，
+//    保证静态页的排版和访客点开后 JS 重渲染的结果一字不差，不另写第二份实现。
+const start = template.indexOf('function esc(s)');
+const endMarker = '/* ================= 数据（从接口读）';
+const end = template.indexOf(endMarker);
+if (start < 0 || end < 0 || end <= start) {
+  throw new Error('在模板里找不到 Markdown 渲染函数段，已中止（模板结构变了，先人工核对）');
+}
+const renderSrc = template.slice(start, end);
+const { esc, renderMD } = new Function(
+  renderSrc + '\nreturn { esc, renderMD };'
+)();
+
+const res = await fetch(`${API}/api/posts?limit=100`);
+if (!res.ok) throw new Error(`拉文章失败：HTTP ${res.status}`);
+const data = await res.json();
+const posts = (data.posts || []).filter((p) => p && p.slug && p.title);
+if (!posts.length) throw new Error('接口返回 0 篇文章，已中止，避免生成空站');
+console.log(`已发布文章 ${posts.length} 篇，开始生成…`);
+
+mkdirSync(OUT, { recursive: true });
+writeFileSync(join(OUT, 'index.html'), template);
+
+let fail = 0;
+for (const p of posts) {
+  const col = COLUMNS[p.category] || { label: p.category || '', author: p.author || 'Miku' };
+  const date = String(p.published_at || p.created_at || '').substring(0, 10);
+  const updated = String(p.updated_at || p.published_at || p.created_at || '').substring(0, 10);
+  const tags = Array.isArray(p.tags) ? p.tags : [];
+  const mins = Math.max(1, Math.ceil(String(p.content || '').length / 400));
+  const desc = String(p.excerpt || '').replace(/\s+/g, ' ').trim().slice(0, 150);
+  const canonical = `${SITE}/post/${p.slug}/`;
+  const bodyHtml =
+    `<h2 class="rtitle">${esc(p.title)}</h2>` +
+    `<div class="rmeta"><span>${date.replace(/-/g, '/')}</span><span>作者：${esc(col.author)}</span>` +
+    tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('') +
+    `<span>约 ${mins} 分钟</span></div>` +
+    `<div class="md fs2">${renderMD(String(p.content || ''))}</div>`;
+  const jsonLd = {
+    '@context': 'https://schema.org', '@type': 'Article',
+    headline: p.title, description: desc, datePublished: date,
+    dateModified: updated, author: { '@type': 'Person', name: p.author || 'Miku' },
+    mainEntityOfPage: canonical,
+  };
+
+  let html = template;
+  html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(p.title)} · ${esc(col.label)} · MikuFans</title>`);
+  html = html.replace(
+    /<meta name="description" content="[^"]*" \/>/,
+    `<meta name="description" content="${esc(desc)}" />\n` +
+    `<link rel="canonical" href="${canonical}" />\n` +
+    `<meta property="og:type" content="article" />\n` +
+    `<meta property="og:title" content="${esc(p.title)} · MikuFans" />\n` +
+    `<meta property="og:description" content="${esc(desc)}" />\n` +
+    `<meta property="og:url" content="${canonical}" />\n` +
+    `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>`
+  );
+  // 文章页初始状态：列表藏起来、文章区直接展开（JS 接管后会按路由重排，不冲突）
+  html = html.replace('<div id="listView">', '<div id="listView" hidden>');
+  html = html.replace('<main id="articleView" hidden>', '<main id="articleView">');
+  html = html.replace('<span class="cur" id="crumbTitle">文章</span>',
+    `<span class="cur" id="crumbTitle">${esc(p.title)}</span>`);
+  html = html.replace('<a href="#list" id="crumbColumn">折腾日记</a>',
+    `<a href="#list" id="crumbColumn">${esc(col.label)}</a>`);
+  html = html.replace('<span id="backLabel">返回折腾日记</span>',
+    `<span id="backLabel">返回${esc(col.label)}</span>`);
+  html = html.replace('<div id="rcontent"></div>', `<div id="rcontent">${bodyHtml}</div>`);
+
+  // 自检：标题换上了、正文真的进了源码，否则宁可报错也不交残页。
+  // 探针与页面纯文本都先抹掉 markdown 记号、反斜杠和空白再比，避免引用/加粗等写法误报。
+  const norm = (s) => s.replace(/<[^>]+>/g, '').replace(/[\s\\*_`>#|~[\]()!-]/g, '');
+  const probe = String(p.content || '').split('\n').map((s) => s.trim())
+    .find((s) => norm(s).length >= 10 && !s.startsWith('```'));
+  if (!html.includes(`<title>${esc(p.title)}`) || (probe && !norm(html).includes(norm(probe).slice(0, 14)))) {
+    console.error(`✗ ${p.slug} 自检没过，跳过`); fail++; continue;
+  }
+  const dir = join(OUT, 'post', p.slug);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'index.html'), html);
+  console.log(`✓ /post/${p.slug}/ 《${p.title}》 ${(html.length / 1024).toFixed(0)}KB`);
+}
+if (fail) throw new Error(`${fail} 篇自检失败，已中止整次生成`);
+
+// —— sitemap：首页 + 每篇 canonical 地址，lastmod 用文章更新日
+const urls = [`  <url><loc>${SITE}/</loc><priority>1.0</priority></url>`]
+  .concat(posts.map((p) => {
+    const lm = String(p.updated_at || p.published_at || '').substring(0, 10);
+    return `  <url><loc>${SITE}/post/${p.slug}/</loc>${lm ? `<lastmod>${lm}</lastmod>` : ''}<priority>0.8</priority></url>`;
+  })).join('\n');
+writeFileSync(join(OUT, 'sitemap.xml'),
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
+console.log(`✓ sitemap.xml 重生：${posts.length + 1} 条 URL`);
+console.log('生成完毕。');

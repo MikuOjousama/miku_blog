@@ -132,21 +132,11 @@ for (const p of posts) {
 if (fail) throw new Error(`${fail} 篇自检失败，已中止整次生成`);
 
 // —— 静态数据：前台改读同源静态 JSON，访客不再请求后端接口。
-// posts.json 是全量（含正文，与 /api/posts?limit=100 同形），
-// posts-summary.json 是轻量版（去正文、带 content_length，与 summary=1 同形），
-// post-<slug>.json 是单篇（与 /api/posts/<slug> 同形），供打开文章时兜底取正文。
+// 只有一份 posts.json 全量（含正文，与 /api/posts?limit=100 同形），列表与正文同源。
 const dataDir = join(OUT, 'data');
 mkdirSync(dataDir, { recursive: true });
 writeFileSync(join(dataDir, 'posts.json'), JSON.stringify({ posts }));
-const summaryPosts = posts.map((p) => {
-  const { content, ...rest } = p;
-  return { ...rest, content_length: String(content || '').length };
-});
-writeFileSync(join(dataDir, 'posts-summary.json'), JSON.stringify({ posts: summaryPosts }));
-for (const p of posts) {
-  writeFileSync(join(dataDir, `post-${p.slug}.json`), JSON.stringify(p));
-}
-console.log(`✓ 静态数据已生成：data/posts.json、data/posts-summary.json、单篇 × ${posts.length}`);
+console.log(`✓ 静态数据已生成：data/posts.json（全量一份）`);
 
 // —— sitemap：首页 + 每篇 canonical 地址，lastmod 用文章更新日
 const urls = [`  <url><loc>${SITE}/</loc><priority>1.0</priority></url>`]

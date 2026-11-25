@@ -49,8 +49,26 @@ const posts = (data.posts || []).filter((p) => p && p.slug && p.title);
 if (!posts.length) throw new Error('接口返回 0 篇文章，已中止，避免生成空站');
 console.log(`已发布文章 ${posts.length} 篇，开始生成…`);
 
+// —— 最近更新：按发布日倒序取最新 5 篇（与前台 renderOtherColumns 同口径，
+//    并列日期保持接口顺序，与 JS 的稳定排序一致）。预渲染成真链接 <a>，
+//    JS 加载后会清空并用同内容重建为按钮，视觉不变；无 JS 时链接直接可点、
+//    爬虫能顺着进文章页。样式靠下面这段补充 CSS 与 .latest button 对齐。
+const postDate = (p) => String(p.published_at || p.created_at || '').substring(0, 10);
+const latest5 = posts.slice().sort((x, y) => postDate(y).localeCompare(postDate(x))).slice(0, 5);
+const latestHtml = latest5.map((p) => {
+  const col = COLUMNS[p.category] || { label: p.category || '' };
+  return `<a href="/post/${p.slug}/"><span class="k">${esc(col.label)}</span><span class="t">${esc(p.title)}</span><span class="dt">${postDate(p).replace(/-/g, '/')}</span></a>`;
+}).join('');
+const LATEST_CSS = '<style>.latest a{display:flex;gap:12px;align-items:baseline;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 16px;text-align:left;color:var(--ink);width:100%;box-shadow:var(--shadow);text-decoration:none;box-sizing:border-box}.latest a:hover{border-color:var(--teal)}@media (max-width:560px){.latest .dt{display:none}.latest a{flex-wrap:wrap}}</style>';
+function injectLatest(html) {
+  return html
+    .replace('</head>', LATEST_CSS + '\n</head>')
+    .replace('<div class="latest" id="latestList"></div>',
+      `<div class="latest" id="latestList">${latestHtml}</div>`);
+}
+
 mkdirSync(OUT, { recursive: true });
-writeFileSync(join(OUT, 'index.html'), template);
+writeFileSync(join(OUT, 'index.html'), injectLatest(template));
 
 let fail = 0;
 for (const p of posts) {
@@ -74,7 +92,7 @@ for (const p of posts) {
     mainEntityOfPage: canonical,
   };
 
-  let html = template;
+  let html = injectLatest(template);
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(p.title)} · ${esc(col.label)} · MikuFans</title>`);
   html = html.replace(
     /<meta name="description" content="[^"]*" \/>/,
@@ -121,4 +139,13 @@ const urls = [`  <url><loc>${SITE}/</loc><priority>1.0</priority></url>`]
 writeFileSync(join(OUT, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
 console.log(`✓ sitemap.xml 重生：${posts.length + 1} 条 URL`);
+
+// 首页自检：最近更新 5 篇的链接必须都在首页源码里
+const homeHtml = readFileSync(join(OUT, 'index.html'), 'utf8');
+for (const p of latest5) {
+  if (!homeHtml.includes(`href="/post/${p.slug}/"`) || !homeHtml.includes(esc(p.title))) {
+    throw new Error(`首页最近更新自检失败：缺 ${p.slug}`);
+  }
+}
+console.log(`✓ 首页最近更新已静态化：${latest5.map((p) => p.slug).join(', ')}`);
 console.log('生成完毕。');

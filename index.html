@@ -545,6 +545,15 @@ function renderMD(src){
 var API_POSTS_URL='/data/posts-summary.json';
 var API_POST_URL='/data/post-';
 var API_POSTS_FULL_URL='/data/posts.json';
+/* 数据版本戳：生成器构建时按文章内容算出并盖进页面（替换 __DATA_V__）。
+   带戳地址每次内容变更就换新，专治 /data/ 长 TTL 缓存攥着旧名单不放；
+   模板被直接打开（没过生成器）时 DATA_V 还是占位符原文，按无戳处理。 */
+var DATA_V='__DATA_V__';
+var DV=(DATA_V&&DATA_V!=='__DATA_V__')?('.'+DATA_V):'';
+if(DV){
+  API_POSTS_URL='/data/posts-summary'+DV+'.json';
+  API_POSTS_FULL_URL='/data/posts'+DV+'.json';
+}
 /* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
 function trackView(slug){
   try{
@@ -585,7 +594,7 @@ function loadMd(a){
     return Promise.resolve(md);
   }
   if(!a.real){mdCache[a.id]='';return Promise.resolve('');}
-  return fetch(API_POST_URL+encodeURIComponent(a.id)+'.json').then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(p){
+  return fetch(API_POST_URL+encodeURIComponent(a.id)+DV+'.json').then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(p){
     var c=typeof p.content==='string'?p.content:'';
     a.content=c;
     var md2=c.replace(/^\\n+|\\s+$/g,'');

@@ -397,7 +397,7 @@
     <div class="searchrow">
       <label class="search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
-        <input id="q" type="search" placeholder="搜标题、正文里的词，比如：延迟、缩放、代码…" autocomplete="off" />
+        <input id="q" type="search" placeholder="搜标题、摘要、标签，比如：延迟、缩放、代码…" autocomplete="off" />
       </label>
       <button class="btn" id="sortBtn" type="button">排序：最新在前</button>
       <button class="btn teal" id="randomBtn" type="button">
@@ -541,8 +541,9 @@ function renderMD(src){
 
 /* ================= 数据（构建时静态生成） ================= */
 /* 文章数据是构建时生成在 /data/ 下的静态 JSON（后台发布后自动重建）：
-   只有一份全量数据，列表与正文同源；访客侧不请求后端接口。 */
-var API_POSTS_URL='/data/posts.json';
+   列表走轻量索引（不含正文），点开文章时按需取单篇 JSON；访客侧不请求后端接口。 */
+var API_POSTS_URL='/data/posts-summary.json';
+var API_POST_URL='/data/post-';
 /* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
 function trackView(slug){
   try{
@@ -573,7 +574,7 @@ function mapPost(p){
     content:content, author:typeof p.author==='string'?p.author:'Miku'
   };
 }
-/* 数据是全量（含正文）：loadMd 直接用条目自带的 content。 */
+/* 列表是轻量索引（无正文）：loadMd 先用条目自带的 content，没有就取单篇 JSON。 */
 var mdCache={},htmlCache={};
 function loadMd(a){
   if(mdCache[a.id]!=null)return Promise.resolve(mdCache[a.id]);
@@ -583,7 +584,13 @@ function loadMd(a){
     return Promise.resolve(md);
   }
   if(!a.real){mdCache[a.id]='';return Promise.resolve('');}
-  mdCache[a.id]='';return Promise.resolve('');
+  return fetch(API_POST_URL+encodeURIComponent(a.id)+'.json').then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(p){
+    var c=typeof p.content==='string'?p.content:'';
+    a.content=c;
+    var md2=c.replace(/^\\n+|\\s+$/g,'');
+    mdCache[a.id]=md2;
+    return md2;
+  });
 }
 function readMins(a){return a.mins||1;}
 var ALLTAGS=[];
@@ -596,8 +603,8 @@ function loadSiteData(){
     ESSAYS=items.filter(function(a){return a.col==='essays';});
     MOODS=items.filter(function(a){return a.col==='moods';});
     ALLITEMS=items.slice();
-    /* 全量数据自带正文：一次全部填进正文缓存，点开文章不用再取；
-       站内搜索连正文一起搜。 */
+    /* 轻量索引无正文：只缓存自带正文的条目（一般没有），其余打开文章时取单篇；
+       站内搜索只搜标题/摘要/标签，不搜正文。 */
     ALLITEMS.forEach(function(a){if(a.content)mdCache[a.id]=String(a.content).replace(/^\n+|\s+$/g,'');});
     ALLTAGS=[];ARTICLES.forEach(function(a){a.tags.forEach(function(t){if(ALLTAGS.indexOf(t)<0)ALLTAGS.push(t);});});
     DATA_READY=true;
@@ -623,7 +630,7 @@ function filtered(){
   var q=qEl.value.trim().toLowerCase();
   var list=ARTICLES.filter(function(a){
     if(curTag!=="全部"&&a.tags.indexOf(curTag)<0)return false;
-    if(q&&(a.title+" "+a.ex+" "+a.tags.join(" ")+" "+(mdCache[a.id]||"")).toLowerCase().indexOf(q)<0)return false;
+    if(q&&(a.title+" "+a.ex+" "+a.tags.join(" ")).toLowerCase().indexOf(q)<0)return false;
     return true;
   });
   list.sort(function(x,y){return sortDesc?y.date.localeCompare(x.date):x.date.localeCompare(y.date);});

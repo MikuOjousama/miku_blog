@@ -539,12 +539,12 @@ function renderMD(src){
   return out.join("\n");
 }
 
-/* ================= 数据（从接口读） ================= */
-/* 文章不再是仓库里的静态数组：页面加载时从公开接口取已发布文章。
-   列表走轻量接口（summary=1，不含正文）；打开文章时正文另走单篇接口取。 */
-var API_POSTS_URL='https://our.mikufans.site/api/posts?limit=100&summary=1';
-var API_POST_URL='https://our.mikufans.site/api/posts/';
-var API_POSTS_FULL_URL='https://our.mikufans.site/api/posts?limit=100';
+/* ================= 数据（构建时静态生成） ================= */
+/* 文章数据是构建时生成在 /data/ 下的静态 JSON（后台发布后自动重建）：
+   列表走轻量版（不含正文）；打开文章时正文另走单篇 JSON 取。访客侧不请求后端接口。 */
+var API_POSTS_URL='/data/posts-summary.json';
+var API_POST_URL='/data/post-';
+var API_POSTS_FULL_URL='/data/posts.json';
 /* 访问量：打开首页记 home、打开文章记文章 slug；同一会话同一篇只计一次，失败不影响页面。 */
 function trackView(slug){
   try{
@@ -586,7 +586,7 @@ function loadMd(a){
     return Promise.resolve(md);
   }
   if(!a.real){mdCache[a.id]='';return Promise.resolve('');}
-  return fetch(API_POST_URL+encodeURIComponent(a.id)).then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(p){
+  return fetch(API_POST_URL+encodeURIComponent(a.id)+'.json').then(function(r){if(!r.ok)throw new Error('api '+r.status);return r.json();}).then(function(p){
     var c=typeof p.content==='string'?p.content:'';
     a.content=c;
     var md2=c.replace(/^\n+|\s+$/g,'');

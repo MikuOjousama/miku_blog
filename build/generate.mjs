@@ -32,7 +32,8 @@ const template = readFileSync(TEMPLATE, 'utf8');
 // —— 复用前台自己的渲染函数：从模板里原样抽 esc / inline / renderMD，
 //    保证静态页的排版和访客点开后 JS 重渲染的结果一字不差，不另写第二份实现。
 const start = template.indexOf('function esc(s)');
-const endMarker = '/* ================= 数据（从接口读）';
+// 终点取数据常量定义处：渲染函数段到此为止只有注释，不含可执行代码。
+const endMarker = 'var API_POSTS_URL=';
 const end = template.indexOf(endMarker);
 if (start < 0 || end < 0 || end <= start) {
   throw new Error('在模板里找不到 Markdown 渲染函数段，已中止（模板结构变了，先人工核对）');
@@ -129,6 +130,23 @@ for (const p of posts) {
   console.log(`✓ /post/${p.slug}/ 《${p.title}》 ${(html.length / 1024).toFixed(0)}KB`);
 }
 if (fail) throw new Error(`${fail} 篇自检失败，已中止整次生成`);
+
+// —— 静态数据：前台改读同源静态 JSON，访客不再请求后端接口。
+// posts.json 是全量（含正文，与 /api/posts?limit=100 同形），
+// posts-summary.json 是轻量版（去正文、带 content_length，与 summary=1 同形），
+// post-<slug>.json 是单篇（与 /api/posts/<slug> 同形），供打开文章时兜底取正文。
+const dataDir = join(OUT, 'data');
+mkdirSync(dataDir, { recursive: true });
+writeFileSync(join(dataDir, 'posts.json'), JSON.stringify({ posts }));
+const summaryPosts = posts.map((p) => {
+  const { content, ...rest } = p;
+  return { ...rest, content_length: String(content || '').length };
+});
+writeFileSync(join(dataDir, 'posts-summary.json'), JSON.stringify({ posts: summaryPosts }));
+for (const p of posts) {
+  writeFileSync(join(dataDir, `post-${p.slug}.json`), JSON.stringify(p));
+}
+console.log(`✓ 静态数据已生成：data/posts.json、data/posts-summary.json、单篇 × ${posts.length}`);
 
 // —— sitemap：首页 + 每篇 canonical 地址，lastmod 用文章更新日
 const urls = [`  <url><loc>${SITE}/</loc><priority>1.0</priority></url>`]

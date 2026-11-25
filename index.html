@@ -678,7 +678,7 @@ function renderList(){
   list.forEach(function(a){
     var b=document.createElement("a");
     b.className="card";
-    b.href="?post="+a.id;
+    b.href=articleUrl(a.id);
     b.setAttribute("aria-label","阅读："+a.title);
     b.addEventListener("click",function(e){
       e.preventDefault();
@@ -746,7 +746,7 @@ var listView=document.getElementById("listView"),
 var cur=null,fsLevel=2;
 function articleIndex(id){for(var i=0;i<ARTICLES.length;i++)if(ARTICLES[i].id===id)return i;return -1;}
 /* ================= 全站 SPA 路由（History API，无刷新原地切换） ================= */
-var basePath=location.pathname;
+var basePath="/";
 var navState={kind:"list",view:"home",id:null};
 var scrollMemory={};
 try{history.scrollRestoration="manual";}catch(e){}
@@ -760,8 +760,8 @@ window.addEventListener("scroll",function(){
   if(scrollSaveTimer)return;
   scrollSaveTimer=setTimeout(function(){scrollSaveTimer=null;rememberScroll();},250);
 },{passive:true});
-function viewUrl(view){return basePath+"?view="+encodeURIComponent(view);}
-function articleUrl(id){var it=findItem(id);return basePath+"?view="+encodeURIComponent(it?it.col:"blog")+"&post="+encodeURIComponent(id);}
+function viewUrl(view){return view==="home"?basePath:basePath+"?view="+encodeURIComponent(view);}
+function articleUrl(id){return "/post/"+encodeURIComponent(id)+"/";}
 function parseRoute(){
   try{
     var sp=new URLSearchParams(location.search);
@@ -904,8 +904,8 @@ function goHome(e){
   navigateToView("home",true);
 }
 function route(){
-  // 首次打开：按当前 URL 定格初始历史记录（旧 #post- / /post/ / ?post=
-  // 统一成 ?view=<栏目>&post=<id>），再渲染对应视图。
+  // 首次打开：按当前 URL 定格初始历史记录（旧 #post- / ?post= 链接
+  // 统一归整成干净路径 /post/<id>/、栏目归整成 /?view=<栏目>），再渲染对应视图。
   var r=parseRoute();
   try{
     history.replaceState({kind:r.kind,view:r.view,id:r.id,scrollY:0},"",r.kind==="article"?articleUrl(r.id):(r.view==="home"?basePath:viewUrl(r.view)));
@@ -972,7 +972,7 @@ window.addEventListener("popstate",function(e){
   applyRoute(r,e.state||null);
 });
 window.addEventListener("hashchange",function(){
-  // 兼容旧的 #post-a1 链接：换成 ?view=&post= 正式路径再打开
+  // 兼容旧的 #post-a1 链接：换成 /post/<id>/ 干净路径再打开
   var hm=(location.hash||"").match(/^#post-(.+)$/);
   if(hm&&findItem(hm[1])){
     if(navState.kind==="article"&&navState.id===hm[1]){

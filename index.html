@@ -461,7 +461,7 @@
           <div id="rcontent"></div>
         </article>
       <div class="sidecol" id="sideCol">
-        <section class="sidecard" aria-label="大小姐小卡片">
+        <section class="sidecard" id="profileCard" aria-label="大小姐小卡片">
           <div class="profrow">
             <div class="sideavatar" role="img" aria-label="大小姐头像"></div>
             <div class="profname">大小姐</div>
@@ -747,6 +747,13 @@ var COLUMNS={
 };
 function findItem(id){for(var i=0;i<ALLITEMS.length;i++)if(ALLITEMS[i].id===id)return ALLITEMS[i];return null;}
 function itemsOf(col){return ALLITEMS.filter(function(a){return a.col===col;});}
+function dispTitle(a){
+  if(/^\d{4}-\d{2}-\d{2}$/.test(a.title)&&a.ex){
+    var t=String(a.ex).replace(/\s+/g," ").trim();
+    if(t)return t.length>20?t.slice(0,20)+"…":t;
+  }
+  return a.title;
+}
 function makeCard(a){
   var b=document.createElement("a");b.className="card";b.href=articleUrl(a.id);
   b.setAttribute("aria-label","阅读："+a.title);
@@ -904,6 +911,8 @@ function openArticle(id,scrollY){
 }
 function renderSidebar(){
   if(!cur)return;
+  var pc=document.getElementById("profileCard");
+  if(pc)pc.style.display=cur.col==="blog"?"none":"";
   var rel=itemsOf(cur.col).filter(function(a){return a.id!==cur.id;})
     .sort(function(x,y){return y.date.localeCompare(x.date);}).slice(0,5);
   var card=document.getElementById("relCard"),nav=document.getElementById("sideRel");
@@ -912,7 +921,7 @@ function renderSidebar(){
     else{
       card.style.display="";
       nav.innerHTML=rel.map(function(a){
-        return '<a class="relitem" href="'+articleUrl(a.id)+'" data-id="'+a.id+'"><span class="relt">'+esc(a.title)+'</span><span class="reld">'+a.date.replace(/-/g,"/")+'</span></a>';
+        return '<a class="relitem" href="'+articleUrl(a.id)+'" data-id="'+a.id+'"><span class="relt">'+esc(dispTitle(a))+'</span><span class="reld">'+a.date.replace(/-/g,"/")+'</span></a>';
       }).join("");
       nav.querySelectorAll("a").forEach(function(el){
         el.addEventListener("click",function(e){e.preventDefault();navigateToArticle(el.getAttribute("data-id"));});
@@ -990,8 +999,8 @@ function drawArticle(mdText){
     '<span>约 '+readMins(cur)+' 分钟</span></div>'+
     bodyHtml+
     '<div class="rnav">'+
-      (prev?'<button type="button" id="prevBtn"><span class="dir">← 上一篇</span><span class="tt">'+esc(prev.title)+"</span></button>":'<button type="button" disabled><span class="dir">没有更早的了</span></button>')+
-      (next?'<button type="button" class="next" id="nextBtn"><span class="dir">下一篇 →</span><span class="tt">'+esc(next.title)+"</span></button>":'<button type="button" class="next" disabled><span class="dir">已经是最新一篇</span></button>')+
+      (prev?'<button type="button" id="prevBtn"><span class="dir">← 上一篇</span><span class="tt">'+esc(dispTitle(prev))+"</span></button>":'<button type="button" disabled><span class="dir">没有更早的了</span></button>')+
+      (next?'<button type="button" class="next" id="nextBtn"><span class="dir">下一篇 →</span><span class="tt">'+esc(dispTitle(next))+"</span></button>":'<button type="button" class="next" disabled><span class="dir">已经是最新一篇</span></button>')+
     "</div>";
   var pb=document.getElementById("prevBtn"),nb=document.getElementById("nextBtn");
   if(pb&&prev)pb.addEventListener("click",function(){navigateToArticle(prev.id);});

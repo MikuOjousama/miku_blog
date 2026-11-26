@@ -119,6 +119,12 @@ for (const p of posts) {
   html = html.replace('<span id="backLabel">返回折腾日记</span>',
     `<span id="backLabel">返回${esc(col.label)}</span>`);
   html = html.replace('<div id="rcontent"></div>', `<div id="rcontent">${bodyHtml}</div>`);
+  // 折腾日记是 P主的文章，不挂大小姐小卡片：静态页先藏好，JS 接管后由 renderSidebar 按栏目维持。
+  if (p.category === 'blog') {
+    if (!html.includes('<section class="sidecard" id="profileCard"')) throw new Error('模板里找不到小卡片锚点，已中止');
+    html = html.replace('<section class="sidecard" id="profileCard"',
+      '<section class="sidecard" id="profileCard" style="display:none"');
+  }
 
   // 自检：标题换上了、正文真的进了源码，否则宁可报错也不交残页。
   // 探针与页面纯文本都先抹掉 markdown 记号、反斜杠和空白再比，避免引用/加粗等写法误报。

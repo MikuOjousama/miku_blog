@@ -119,11 +119,13 @@ for (const p of posts) {
   html = html.replace('<span id="backLabel">返回折腾日记</span>',
     `<span id="backLabel">返回${esc(col.label)}</span>`);
   html = html.replace('<div id="rcontent"></div>', `<div id="rcontent">${bodyHtml}</div>`);
-  // 折腾日记是 P主的文章，不挂大小姐小卡片：静态页先藏好，JS 接管后由 renderSidebar 按栏目维持。
+  // 折腾日记右侧不挂三张卡（小卡片/同栏目/计数）：静态页先藏好，JS 接管后由 renderSidebar 按栏目维持。
   if (p.category === 'blog') {
-    if (!html.includes('<section class="sidecard" id="profileCard"')) throw new Error('模板里找不到小卡片锚点，已中止');
-    html = html.replace('<section class="sidecard" id="profileCard"',
-      '<section class="sidecard" id="profileCard" style="display:none"');
+    for (const cid of ['profileCard', 'relCard', 'statsCard']) {
+      const anchor = `<section class="sidecard" id="${cid}"`;
+      if (!html.includes(anchor)) throw new Error(`模板里找不到侧边栏卡片锚点 ${cid}，已中止`);
+      html = html.replace(anchor, `<section class="sidecard" id="${cid}" style="display:none"`);
+    }
   }
 
   // 自检：标题换上了、正文真的进了源码，否则宁可报错也不交残页。

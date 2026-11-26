@@ -925,7 +925,7 @@ function renderSidebar(){
   }
   var st=document.getElementById("sideStatsLine");
   if(st){
-    var chars=0;ALLITEMS.forEach(function(a){if(a.category===cur.category)chars+=a.clen||0;});
+    var chars=0;ALLITEMS.forEach(function(a){if(a.col===cur.col)chars+=a.clen||0;});
     st.textContent=chars>=10000?("约 "+(chars/10000).toFixed(1)+" 万字"):(chars+" 字");
   }
 }

@@ -180,7 +180,7 @@ const summaryPosts = posts.map((p) => {
   const { content, ...rest } = p;
   return { ...rest, content_length: String(content || '').length };
 });
-// 无戳版照旧写：给还攥着旧页面的访客兜底；新页面一律按戳取数。
+// 数据文件一律固定地址、无版本戳（戳已于 2026-11-25 深夜拆除）：Pages 按部署供数。
 writeFileSync(join(dataDir, 'posts-summary.json'), JSON.stringify({ posts: summaryPosts }));
 writeFileSync(join(dataDir, 'posts.json'), JSON.stringify({ posts }));
 for (const p of posts) {
